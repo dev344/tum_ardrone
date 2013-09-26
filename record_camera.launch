@@ -1,0 +1,4 @@
+<launch>
+  <node name="record" pkg="rosbag" type="record" args="-O $(find tum_ardrone)/bag/flight /ardrone/front/image_raw">
+  </node>
+</launch>
