@@ -64,6 +64,10 @@ private:
 	DronePosition target;
 	bool targetValid;
 
+	// used for moving along a line
+	DronePosition direction;		// the vector of moving direction [ziquan]
+	double lineSpeed;
+
 	// used for integral term
 	TooN::Vector<4> targetNew;	// 0=target has been reached before
 								// 1=target is new
@@ -76,8 +80,6 @@ private:
 	double lastTimeStamp;
 	double targetSetAtClock;
 	ControlCommand hoverCommand;
-
-
 
 	// filled with info (on update)
 	bool  ptamIsGood;
@@ -97,18 +99,20 @@ public:
 	// adds a waypoint
 	void setTarget(DronePosition newTarget);
 	void clearTarget();
-	DronePosition getCurrentTarget();
+	DronePosition getCurrentTarget();	
 	ControlCommand getLastControl();
+
+	/* START [ziquan] */
+	void setDirection(DronePosition newDirection, double newSpeed);
+	DronePosition getCurrentDirection();
+	/* END [ziquan] */
+
 
 	// gets last error
 	TooN::Vector<4> getLastErr();
 
 	DroneController(void);
 	~DroneController(void);
-
-
-
-
 
 	// PID control parameters. settable via dynamic_reconfigure
 	// target is where i want to get to.

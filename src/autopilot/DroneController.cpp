@@ -17,18 +17,23 @@
  *  You should have received a copy of the GNU General Public License
  *  along with tum_ardrone.  If not, see <http://www.gnu.org/licenses/>.
  */
- 
- 
- 
+
 #include "DroneController.h"
 #include "gvars3/instances.h"
 #include "../HelperFunctions.h"
 #include "ControlNode.h"
+#include <cmath>	// [ziquan]
 
 DroneController::DroneController(void)
 {
 	target = DronePosition(TooN::makeVector(0.0,0.0,0.0),0.0);
 	targetValid = false;
+	
+	/* START [ziquan] */
+	direction = DronePosition(TooN::makeVector(0.0,0.0,0.0),0.0);
+	lineSpeed = 1.0;	
+	/* END [ziquan] */
+
 	last_err[2] = 0;
 	lastTimeStamp = 0;
 
@@ -88,6 +93,12 @@ ControlCommand DroneController::update(tum_ardrone::filter_stateConstPtr state)
 void DroneController::setTarget(DronePosition newTarget)
 {
 	target = newTarget;
+	
+	/* START [ziquan] */
+	target.pos += direction.pos * lineSpeed;
+	target.yaw += direction.yaw;
+	/* END [ziquan] */
+
 	target.yaw = angleFromTo2(target.yaw,-180,180);
 	targetSetAtClock = getMS()/1000.0;
 	targetNew = TooN::makeVector(1.0,1.0,1.0,1.0);
@@ -111,7 +122,37 @@ DronePosition DroneController::getCurrentTarget()
 void DroneController::clearTarget()
 {
 	targetValid = false;
+	direction.pos[0] = direction.pos[1] = direction.pos[2] = direction.yaw = 0;	// [ziquan]
 }
+
+/* START [ziquan] */
+void DroneController::setDirection(DronePosition newDirection, double newSpeed)
+{
+	direction = newDirection;
+	
+	double temp = direction.pos[0] * direction.pos[0] + direction.pos[1] * direction.pos[1] + direction.pos[2] * direction.pos[2];
+	if(temp <= 0.01)
+		direction.pos[0] = direction.pos[1] = direction.pos[2] = 0;
+	
+	direction.pos[0] /= sqrt(temp);
+	direction.pos[1] /= sqrt(temp);
+	direction.pos[2] /= sqrt(temp);
+	
+	lineSpeed = newSpeed;
+
+	char buf[200];
+	snprintf(buf,200,"New Direction and Speed: xyz = %.3f, %.3f, %.3f,  yaw=%.3f, lineSpeed=%.3f", direction.pos[0],direction.pos[1],direction.pos[2],direction.yaw,lineSpeed);
+	ROS_INFO(buf);
+
+	if(node != NULL)
+		node->publishCommand(std::string("u l ") + buf);
+}
+
+DronePosition DroneController::getCurrentDirection()
+{
+	return direction;
+}
+/* END [ziquan] */
 
 void i_term_increase(double& i_term, double new_err, double cap)
 {
@@ -152,7 +193,7 @@ void DroneController::calcControl(TooN::Vector<4> new_err, TooN::Vector<4> d_err
 	i_term_increase(i_term[0],new_err[0] * sec, 0.1f / Ki_rp+(1e-10));
 
 	// kill integral term when first crossing target
-	// that is, thargetNew is set, it was set at least 100ms ago, and err changed sign.
+	// that is, targetNew is set, it was set at least 100ms ago, and err changed sign.
 	for(int i=0;i<4;i++)
 		if(targetNew[i] > 0.5 && getMS()/1000.0 - targetSetAtClock > 0.1 && last_err[i] * new_err[i] < 0)
 		{

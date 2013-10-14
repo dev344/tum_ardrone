@@ -33,9 +33,10 @@
 #include <string>
 
 // include KI's
-#include "KI/KIAutoInit.h";
-#include "KI/KIFlyTo.h";
-#include "KI/KILand.h";
+#include "KI/KIAutoInit.h"
+#include "KI/KIFlyTo.h"
+#include "KI/KILand.h"
+#include "KI/KIFlyAlong.h"	//[ziquan]
 #include "KI/KIProcedure.h"
 
 
@@ -87,6 +88,7 @@ ControlNode::ControlNode()
 	parameter_InitialReachDist = 0.2;
 	parameter_StayWithinDist = 0.5;
 	parameter_StayTime = 2;
+	parameter_LineSpeed = 0.1;
 	isControlling = false;
 	currentKI = NULL;
 	lastSentControl = ControlCommand(0,0,0,0);
@@ -159,7 +161,7 @@ void ControlNode::popNextCommand(const tum_ardrone::filter_stateConstPtr statePt
 		char buf[100];
 		float parameters[10];
 
-		int pi;
+		//int pi;
 
 		// replace macros
 		if((p = command.find("$POSE$")) != std::string::npos)
@@ -232,6 +234,13 @@ void ControlNode::popNextCommand(const tum_ardrone::filter_stateConstPtr statePt
 			commandUnderstood = true;
 		}
 
+		// setLineSpeed [ziquan]
+		else if(sscanf(command.c_str(),"setLineSpeed %f",&parameters[0]) == 1)
+		{
+			parameter_LineSpeed = parameters[0];
+			commandUnderstood = true;
+		}
+
 		// goto
 		else if(sscanf(command.c_str(),"goto %f %f %f %f",&parameters[0], &parameters[1], &parameters[2], &parameters[3]) == 4)
 		{
@@ -295,6 +304,38 @@ void ControlNode::popNextCommand(const tum_ardrone::filter_stateConstPtr statePt
 		else if(command == "lockScaleFP")
 		{
 			publishCommand("p lockScaleFP");
+			commandUnderstood = true;
+		}
+
+		// goAlong [ziquan]
+		else if(sscanf(command.c_str(),"goAlong %f %f %f %f",&parameters[0], &parameters[1], &parameters[2], &parameters[3]) == 4)
+		{
+			currentKI = new KIFlyAlong(
+				DronePosition(TooN::makeVector(statePtr->x,statePtr->y,statePtr->z), statePtr->yaw),
+				DronePosition(TooN::makeVector(parameters[0],parameters[1],parameters[2]), parameters[3]),		
+				parameter_LineSpeed,
+				parameter_StayTime,
+				parameter_MaxControl
+				);
+			currentKI->setPointers(this,&controller);
+			commandUnderstood = true;
+		}
+
+		// goAlongFrom [ziquan]
+		else if(sscanf(command.c_str(),"goAlongFrom %f %f %f %f %f %f %f %f",&parameters[0], &parameters[1], &parameters[2], &parameters[3], &parameters[4], &parameters[5], &parameters[6], &parameters[7]) == 8)
+		{
+			currentKI = new KIFlyAlong(
+				// from
+				DronePosition(
+				TooN::makeVector(parameters[4],parameters[5],parameters[6]) + parameter_referenceZero.pos,
+					parameters[7] + parameter_referenceZero.yaw),
+				// along
+				DronePosition(TooN::makeVector(parameters[0],parameters[1],parameters[2]), parameters[3]),	
+				parameter_LineSpeed,
+				parameter_StayTime,
+				parameter_MaxControl
+				);
+			currentKI->setPointers(this,&controller);
 			commandUnderstood = true;
 		}
 

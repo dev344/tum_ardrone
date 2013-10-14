@@ -76,8 +76,7 @@ private:
 	double parameter_MaxControl;
 	double parameter_InitialReachDist;
 	double parameter_StayWithinDist;
-
-
+	double parameter_LineSpeed;	// [ziquan]
 
 
 	void popNextCommand(const tum_ardrone::filter_stateConstPtr statePtr);

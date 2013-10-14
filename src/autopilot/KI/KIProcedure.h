@@ -48,7 +48,7 @@ public:
 
 	// is called with control-frequency, is supposed to each time generate and send a new
 	// control command to the drone.
-	// returns wether the goal of this KI has been reached (leads to the KI being destroyed and the next one being popped).
+	// returns whether the goal of this KI has been reached (leads to the KI being destroyed and the next one being popped).
 	virtual bool update(const tum_ardrone::filter_stateConstPtr statePtr) = 0;
 
 	// constructed shortly before first update.
