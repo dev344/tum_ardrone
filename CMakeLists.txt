@@ -117,6 +117,7 @@ set(AUTOPILOT_SOURCE_FILES
 	src/autopilot/KI/KILand.cpp
 	src/autopilot/KI/KIAutoInit.cpp
 	src/autopilot/KI/KIFlyTo.cpp
+	src/autopilot/KI/KIFlyAlong.cpp		# [ziquan]
 )
 set(AUTOPILOT_HEADER_FILES        
 	src/autopilot/ControlNode.h
@@ -124,6 +125,7 @@ set(AUTOPILOT_HEADER_FILES
 	src/autopilot/KI/KILand.h
 	src/autopilot/KI/KIAutoInit.h
 	src/autopilot/KI/KIFlyTo.h
+	src/autopilot/KI/KIFlyAlong.h		# [ziquan]
 	src/autopilot/KI/KIProcedure.h
 )
 
