@@ -1,0 +1,17 @@
+setLineSpeed 0.5
+setReference $POSE$
+
+setStayTime 1
+goto -0.5 0 0.5 0
+setStayTime 2
+goAlong 1 0 0 0
+setStayTime 2
+goAlong 0 0 -1 0
+setStayTime 2
+goAlong -1 0 0 0
+setStayTime 2
+goAlong 0 0 -1 0
+setStayTime 2
+goAlong 1 0 0 0
+
+land
