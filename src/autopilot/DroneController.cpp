@@ -122,22 +122,22 @@ DronePosition DroneController::getCurrentTarget()
 void DroneController::clearTarget()
 {
 	targetValid = false;
-	direction.pos[0] = direction.pos[1] = direction.pos[2] = direction.yaw = 0;	// [ziquan]
 }
 
 /* START [ziquan] */
 void DroneController::setDirection(DronePosition newDirection, double newSpeed)
 {
 	direction = newDirection;
-	
-	double temp = direction.pos[0] * direction.pos[0] + direction.pos[1] * direction.pos[1] + direction.pos[2] * direction.pos[2];
+
+	double temp = direction.pos * direction.pos;
 	if(temp <= 0.01)
+	{
 		direction.pos[0] = direction.pos[1] = direction.pos[2] = 0;
-	
-	direction.pos[0] /= sqrt(temp);
-	direction.pos[1] /= sqrt(temp);
-	direction.pos[2] /= sqrt(temp);
-	
+	}else{
+		direction.pos[0] /= sqrt(temp);
+		direction.pos[1] /= sqrt(temp);
+		direction.pos[2] /= sqrt(temp);
+	}
 	lineSpeed = newSpeed;
 
 	char buf[200];
@@ -151,6 +151,12 @@ void DroneController::setDirection(DronePosition newDirection, double newSpeed)
 DronePosition DroneController::getCurrentDirection()
 {
 	return direction;
+}
+
+void DroneController::clearDirection()
+{
+	
+	direction.pos[0] = direction.pos[1] = direction.pos[2] = direction.yaw = 0;
 }
 /* END [ziquan] */
 

@@ -34,6 +34,7 @@
 #include <ardrone_autonomy/Navdata.h>
 #include "deque"
 #include "tum_ardrone/filter_state.h"
+#include "tum_ardrone/compare_state.h" // [ziquan]
 #include "PTAMWrapper.h"
 #include "std_msgs/String.h"
 #include "std_msgs/Empty.h"
@@ -54,6 +55,8 @@ EstimationNode::EstimationNode()
     navdata_channel = nh_.resolveName("ardrone/navdata");
     control_channel = nh_.resolveName("cmd_vel");
     output_channel = nh_.resolveName("ardrone/predictedPose");
+
+	compare_channel = nh_.resolveName("ardrone/compare");//[ziquan]
     video_channel = nh_.resolveName("ardrone/image_raw");
     command_channel = nh_.resolveName("tum_ardrone/com");
 	packagePath = ros::package::getPath("tum_ardrone");
@@ -85,7 +88,8 @@ EstimationNode::EstimationNode()
 	vid_sub          = nh_.subscribe(video_channel,10, &EstimationNode::vidCb, this);
 
 	dronepose_pub	   = nh_.advertise<tum_ardrone::filter_state>(output_channel,1);
-
+	
+	compare_pub	= nh_.advertise<tum_ardrone::compare_state>(compare_channel,1); //[ziquan]
 	tum_ardrone_pub	   = nh_.advertise<std_msgs::String>(command_channel,50);
 	tum_ardrone_sub	   = nh_.subscribe(command_channel,50, &EstimationNode::comCb, this);
 
@@ -191,7 +195,9 @@ void EstimationNode::navdataCb(const ardrone_autonomy::NavdataConstPtr navdataPt
 			pingNav << " " << pingVid << "\n";
 		pthread_mutex_unlock(&logIMU_CS);
 	}
-
+	s2.rotX = lastNavdataReceived.rotX; //[ziquan]
+	s2.rotY = lastNavdataReceived.rotY; //[ziquan]
+	s2.rotZ = lastNavdataReceived.rotZ; //[ziquan]
 }
 
 void EstimationNode::velCb(const geometry_msgs::TwistConstPtr velPtr)
@@ -280,7 +286,13 @@ void EstimationNode::Loop()
 
 		  // publish!
 		  dronepose_pub.publish(s);
-
+		/*START: [ziquan]*/
+		s2.header.stamp = s.header.stamp;
+		s2.roll = s.dx;
+		s2.pitch = s.pitch;
+		s2.yaw = s.yaw;
+		compare_pub.publish(s2);
+		/*END: [ziquan]*/
 
 		  // --------- if need be: add fake PTAM obs --------
 		  // if PTAM updates hang (no video or e.g. init), filter is never permanently rolled forward -> queues get too big.

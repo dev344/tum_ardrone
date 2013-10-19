@@ -32,6 +32,7 @@
 #include "std_srvs/Empty.h"
 #include "ardrone_autonomy/Navdata.h"
 #include "tum_ardrone/filter_state.h"
+#include "tum_ardrone/compare_state.h" // [ziquan]
 #include "std_msgs/String.h"
 #include <dynamic_reconfigure/server.h>
 #include "tum_ardrone/StateestimationParamsConfig.h"
@@ -61,6 +62,7 @@ private:
 
 	// output
 	ros::Publisher dronepose_pub;
+	ros::Publisher compare_pub; //[ziquan]
 
 	ros::NodeHandle nh_;
 
@@ -76,6 +78,8 @@ private:
 	std::string navdata_channel;
 	std::string control_channel;
 	std::string output_channel;
+	std::string compare_channel;//[ziquan]
+	tum_ardrone::compare_state s2; //[ziquan]
 	std::string video_channel;
 	std::string command_channel;
 

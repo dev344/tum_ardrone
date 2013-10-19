@@ -45,6 +45,7 @@ bool KIFlyAlong::update(const tum_ardrone::filter_stateConstPtr statePtr)
 	// time reached?
 	if(!isCompleted && startAtClock >= 0 && ((getMS() - startAtClock) > stayTimeMs))
 	{
+		controller->clearDirection();
 		printf("line done!\n");
 		isCompleted = true;
 	}

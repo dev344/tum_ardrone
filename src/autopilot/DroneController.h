@@ -105,6 +105,7 @@ public:
 	/* START [ziquan] */
 	void setDirection(DronePosition newDirection, double newSpeed);
 	DronePosition getCurrentDirection();
+	void clearDirection();
 	/* END [ziquan] */
 
 

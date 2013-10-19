@@ -412,7 +412,7 @@ void ControlNode::Loop()
 			ROS_WARN("Autopilot enabled, but no estimated pose received - sending HOVER.");
 		}
 
-		// -------------- 2. update info. ---------------
+		// -------------- 3. update info. ---------------
 		if((ros::Time::now() - lastStateUpdate) > ros::Duration(0.4))
 		{
 			reSendInfo();
