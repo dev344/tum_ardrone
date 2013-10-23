@@ -1,0 +1,10 @@
+setReference $POSE$
+setLineSpeed 0.2
+goto 1 -1 0 -45
+
+setStayTime 10
+circle 0 0 0
+
+land
+
+
