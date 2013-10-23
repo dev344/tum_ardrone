@@ -37,6 +37,8 @@
 #include "KI/KIFlyTo.h"
 #include "KI/KILand.h"
 #include "KI/KIFlyAlong.h"	//[ziquan]
+#include "KI/KICircle.h"	//[ziquan]
+#include "KI/KIQLearning.h"	//[ziquan]
 #include "KI/KIProcedure.h"
 
 
@@ -338,7 +340,30 @@ void ControlNode::popNextCommand(const tum_ardrone::filter_stateConstPtr statePt
 			currentKI->setPointers(this,&controller);
 			commandUnderstood = true;
 		}
-
+		// circle [ziquan]
+		else if(sscanf(command.c_str(),"circle %f %f %f",&parameters[0], &parameters[1], &parameters[2]) == 3)
+		{
+			currentKI = new KICircle(
+				// current position
+				DronePosition(TooN::makeVector(statePtr->x,statePtr->y,statePtr->z), statePtr->yaw),
+				// center
+				TooN::makeVector(parameters[0], parameters[1], parameters[2]) + parameter_referenceZero.pos,
+				// upVector
+				TooN::makeVector(0.0, 0.0, 1.0),
+				parameter_LineSpeed,
+				parameter_StayTime,
+				parameter_MaxControl
+				);
+			currentKI->setPointers(this,&controller);
+			commandUnderstood = true;
+		}
+		// Qlearning [ziquan]
+		else if(sscanf(command.c_str(),"qlearn %f %f",&parameters[0], &parameters[1]) == 2)
+		{
+			currentKI = new KIQLearning(parameters[0], parameters[1]);
+			currentKI->setPointers(this,&controller);
+			commandUnderstood = true;
+		}
 		if(!commandUnderstood)
 			ROS_INFO("unknown command, skipping!");
 	}

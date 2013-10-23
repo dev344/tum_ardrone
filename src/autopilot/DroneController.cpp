@@ -58,19 +58,19 @@ double angleFromTo2(double angle, double min, double sup)
 // based on the currently active command ant the drone's position.
 ControlCommand DroneController::update(tum_ardrone::filter_stateConstPtr state)
 {
-	TooN::Vector<3> pose = TooN::makeVector(state->x, state->y, state->z);
-	double yaw = state->yaw;
-	TooN::Vector<4> speeds = TooN::makeVector(state->dx, state->dy, state->dz, state->dyaw);
 	ptamIsGood = state->ptamState == state->PTAM_BEST || state->ptamState == state->PTAM_GOOD || state->ptamState == state->PTAM_TOOKKF;
 	scaleAccuracy = state->scaleAccuracy;
 
 	// calculate (new) errors.
 	TooN::Vector<4> new_err = TooN::makeVector(
-		target.pos[0] - pose[0],
-		target.pos[1] - pose[1],
-		target.pos[2] - pose[2],
-		target.yaw - yaw
+		target.pos[0] - state->x,
+		target.pos[1] - state->y,
+		target.pos[2] - state->z,
+		target.yaw - state->yaw
 		);
+
+	// speeds
+	TooN::Vector<4> speeds = TooN::makeVector(state->dx, state->dy, state->dz, state->dyaw);
 
 	// yaw error needs special attention, it can always be pushed in between 180 and -180.
 	// this does not affect speeds and makes the drone always take the quickest rotation side.
@@ -78,7 +78,7 @@ ControlCommand DroneController::update(tum_ardrone::filter_stateConstPtr state)
 	TooN::Vector<4> d_err = TooN::makeVector(-speeds[0], -speeds[1], -speeds[2], -speeds[3]);
 
 	if(targetValid)
-		calcControl(new_err, d_err, yaw);
+		calcControl(new_err, d_err, state->yaw);
 	else
 	{
 		lastSentControl = hoverCommand;
@@ -130,7 +130,7 @@ void DroneController::setDirection(DronePosition newDirection, double newSpeed)
 	direction = newDirection;
 
 	double temp = direction.pos * direction.pos;
-	if(temp <= 0.01)
+	if(temp < 0.1)
 	{
 		direction.pos[0] = direction.pos[1] = direction.pos[2] = 0;
 	}else{

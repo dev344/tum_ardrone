@@ -1,5 +1,5 @@
 setStayTime 20
-goAlong 0 0 0 0.1
+goAlong 0 0 0 0.5
 setStayTime 1
 
 land

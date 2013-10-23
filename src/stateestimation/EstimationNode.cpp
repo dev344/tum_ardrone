@@ -195,9 +195,9 @@ void EstimationNode::navdataCb(const ardrone_autonomy::NavdataConstPtr navdataPt
 			pingNav << " " << pingVid << "\n";
 		pthread_mutex_unlock(&logIMU_CS);
 	}
-	s2.rotX = lastNavdataReceived.rotX; //[ziquan]
-	s2.rotY = lastNavdataReceived.rotY; //[ziquan]
-	s2.rotZ = lastNavdataReceived.rotZ; //[ziquan]
+	//s2.rotX = lastNavdataReceived.rotX; //[ziquan]
+	//s2.rotY = lastNavdataReceived.rotY; //[ziquan]
+	//s2.rotZ = lastNavdataReceived.rotZ; //[ziquan]
 }
 
 void EstimationNode::velCb(const geometry_msgs::TwistConstPtr velPtr)
@@ -287,10 +287,8 @@ void EstimationNode::Loop()
 		  // publish!
 		  dronepose_pub.publish(s);
 		/*START: [ziquan]*/
-		s2.header.stamp = s.header.stamp;
-		s2.roll = s.dx;
+		s2.dx = s.dx;
 		s2.pitch = s.pitch;
-		s2.yaw = s.yaw;
 		compare_pub.publish(s2);
 		/*END: [ziquan]*/
 

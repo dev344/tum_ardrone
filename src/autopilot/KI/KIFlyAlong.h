@@ -9,17 +9,12 @@
 class KIFlyAlong : public KIProcedure
 {
 private:
-	//int reachedAtClock;
 	int startAtClock;
-	//bool reached;
-	//bool targetSet;
 	bool directionSet;
 	bool isCompleted;
 
 	int stayTimeMs;
 	double maxControlFactor;
-	//double initialReachedDist;
-	//double stayWithinDist;
 
 	DronePosition checkpoint;
 	DronePosition direction;

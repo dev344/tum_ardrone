@@ -68,9 +68,20 @@ bool KICircle::update(const tum_ardrone::filter_stateConstPtr statePtr)
 	checkpoint.pos = centerpos + radiusVector;
 	
 	// compute target yaw
-	if(abs(diffVector[0]) < 0.1)
+	if(abs(diffVector[0]) < 0.3)
 	{
-		checkpoint.yaw = 0;
+		if(abs(diffVector[1]) < 0.3)
+		{
+			printf("no change to yaw because of too near distance: %f\n", sqrt(diffVector * diffVector));	
+		}
+		else if(diffVector[1] > 0)
+		{	
+			checkpoint.yaw = 0;
+		}
+		else
+		{
+			checkpoint.yaw = 180;
+		}
 	} 
 	else 
 	{
