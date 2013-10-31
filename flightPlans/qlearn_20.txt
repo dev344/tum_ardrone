@@ -1,0 +1,4 @@
+qlearn 20 1
+setStayTime 0.1
+goto 0 0 0 0
+
