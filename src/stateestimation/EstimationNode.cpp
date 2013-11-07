@@ -287,8 +287,8 @@ void EstimationNode::Loop()
 		  // publish!
 		  dronepose_pub.publish(s);
 		/*START: [ziquan]*/
-		s2.dx = s.dx;
 		s2.pitch = s.pitch;
+		s2.dy = s.dy;
 		compare_pub.publish(s2);
 		/*END: [ziquan]*/
 

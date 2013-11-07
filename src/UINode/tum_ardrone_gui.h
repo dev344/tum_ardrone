@@ -109,8 +109,8 @@ protected:
     void keyPressEvent( QKeyEvent * key);
     void keyReleaseEvent( QKeyEvent * key);
     int mapKey(int k);
-    bool isPressed[8];	//{j k l i u o q a}
-    unsigned int lastRepeat[8];
+    bool isPressed[18];	//{j k l i u o q a 1 2 3 4 5 6 7 8 9 0}
+    unsigned int lastRepeat[18];
 
 
 private:

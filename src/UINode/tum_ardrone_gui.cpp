@@ -59,11 +59,11 @@ tum_ardrone_gui::tum_ardrone_gui(QWidget *parent)
 {
 	ui.setupUi(this);
 	rosThread = NULL;
-	sensGaz = sensYaw = sensRP = 1;
+	sensGaz = sensYaw = sensRP = 2;	// [ziquan: original value was 1]
 	currentControlSource = CONTROL_NONE;
 	useHovering = true;
 
-	for(int i=0;i<8;i++)
+	for(int i=0;i<18;i++)
 	{
 		isPressed[i] = false;
 		lastRepeat[i] = 0;
@@ -336,6 +336,8 @@ int tum_ardrone_gui::mapKey(int k)
 		case 65: //a
 			return 7;
 	}
+	if (k >= 48 && k <= 57)	// 0 ~ 9
+		return k - 48 + 8;
 	return -1;
 }
 
@@ -400,7 +402,7 @@ void tum_ardrone_gui::keyPressEvent( QKeyEvent * key)
 ControlCommand tum_ardrone_gui::calcKBControl()
 {
 	// clear keys that have not been refreshed for 1s, it is set to "not pressed"
-	for(int i=0;i<8;i++)
+	for(int i=0;i<18;i++)
 		isPressed[i] = isPressed[i] && ((lastRepeat[i] + 1000) > getMS());
 
 	ControlCommand c;
@@ -413,6 +415,16 @@ ControlCommand tum_ardrone_gui::calcKBControl()
 	if(isPressed[5]) c.yaw = sensYaw; // o
 	if(isPressed[6]) c.gaz = sensRP; // q
 	if(isPressed[7]) c.gaz = -sensRP; // a
+	if(isPressed[8]) c.pitch = 0.01 * sensRP;		// 0
+	if(isPressed[9]) c.pitch = sensRP; 				// 1
+	if(isPressed[10]) c.pitch = 0.75 * sensRP; 	// 2
+	if(isPressed[11]) c.pitch = 0.50 * sensRP; 	// 3
+	if(isPressed[12]) c.pitch = 0.25 * sensRP; 	// 4
+	if(isPressed[13]) c.pitch = 0;					// 5
+	if(isPressed[14]) c.pitch = -0.25 * sensRP; 	// 6
+	if(isPressed[15]) c.pitch = -0.50 * sensRP;	// 7
+	if(isPressed[16]) c.pitch = -0.75 * sensRP;	// 8
+	if(isPressed[17]) c.pitch = -sensRP;			// 9
 
 	return c;
 }

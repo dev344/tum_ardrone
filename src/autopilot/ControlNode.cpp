@@ -39,6 +39,7 @@
 #include "KI/KIFlyAlong.h"	//[ziquan]
 #include "KI/KICircle.h"	//[ziquan]
 #include "KI/KIQLearning.h"	//[ziquan]
+#include "KI/KIModel.h"		//[ziquan]
 #include "KI/KIProcedure.h"
 
 
@@ -361,6 +362,13 @@ void ControlNode::popNextCommand(const tum_ardrone::filter_stateConstPtr statePt
 		else if(sscanf(command.c_str(),"qlearn %f %f",&parameters[0], &parameters[1]) == 2)
 		{
 			currentKI = new KIQLearning(parameters[0], parameters[1]);
+			currentKI->setPointers(this,&controller);
+			commandUnderstood = true;
+		}
+		// Model-based learning [ziquan]
+		else if(sscanf(command.c_str(),"mlearn %f %f",&parameters[0], &parameters[1]) == 2)
+		{
+			currentKI = new KIModel((int)(parameters[0]), parameters[1]);
 			currentKI->setPointers(this,&controller);
 			commandUnderstood = true;
 		}
