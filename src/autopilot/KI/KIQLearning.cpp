@@ -10,10 +10,11 @@ KIQLearning::KIQLearning(double targetPitchP,
 	targetPitch = targetPitchP;
 	timePerTrialMs = (int)(1000*timePerTrial);
 
-	numOfUpdate = -99999999;
+	numOfUpdate = 0;
 	numOfActionsInOneTrial = 0;
 	numOfTrials = -99999999;
-	
+	numOfSuccess = -99999999;
+
 	startAtClock = -1;
 	isCompleted = false;
 
@@ -24,17 +25,16 @@ KIQLearning::KIQLearning(double targetPitchP,
 	infile.open(qlogFileName.c_str());
 	if(infile.is_open())
 	{
-		infile >> numOfTrials >> numOfUpdate;
-		numOfTrials ++;
+		infile >> numOfTrials >> numOfSuccess;
 	}
 	else
 	{
 		printf("cannot find log file: q_log.txt\n");
-		numOfTrials = numOfUpdate = 0;
+		numOfTrials = numOfSuccess = 0;
 	}
-	for(int i = 0; i < 36; i++){
-		for(int j = 0; j < 10; j++){
-			for(int k = 0; k < 7; k++){
+	for(int i = 0; i < 25; i++){
+		for(int j = 0; j < 11; j++){
+			for(int k = 0; k < 3; k++){
 				if(infile.is_open())
 				{
 					infile >> Q[i][j][k] >> Nsa[i][j][k];
@@ -64,57 +64,57 @@ KIQLearning::~KIQLearning(void)
 
 bool KIQLearning::update(const tum_ardrone::filter_stateConstPtr statePtr)
 {
-	// waiting for action to take effect
-	if (numOfUpdate % MAX_NUM_OF_UPDATES_PER_STEP != 0)
-	{
-		numOfUpdate++;		
-		writeLog();
-		return false;
-	}
-
 	// perceive
 	double pitch = statePtr->pitch;
-	double velocity = statePtr->dx;
+	double velocity = statePtr->dy;
 	LearningState newState = LearningState(pitch, velocity);
 	double newReward = reward(newState);
 
 	int pitchIdx = pitchToIndex(pitch);
 	int velocityIdx = velocityToIndex(velocity);
 	
-	// check terminal state : [learn]
-	if(isTerminal(newState)){
+	// check terminal state : [learnt]
+	if(isTerminal(newState))
+	{
 		// increment and reset
 		numOfTrials ++;			// increment total number of trials
-		startAtClock = -1;		// restart time
+		numOfSuccess ++;			// increment total number of successful trials
+		//startAtClock = -1;		// restart time
 		numOfActionsInOneTrial = 0;	// reset counter of actions
+		
+		Q[pitchIdx][velocityIdx][3] = newReward;
 
-		// update reward
-		Q[previousPitchIdx][previousVelocityIdx][6] = newReward;
+		// print
+		printf("finish %d trials, good terminal target = %f, [pitch = %f, velocity = %f]\n", numOfTrials, targetPitch, newState.pitch, newState.velocity);
+
+		isCompleted = true;
+	}
+	else if(isBadTerminal(newState))
+	{
+		// increment and reset
+		numOfTrials ++;			// increment total number of trials
+		//startAtClock = -1;		// restart time
+		numOfActionsInOneTrial = 0;	// reset counter of actions
+		
+		Q[pitchIdx][velocityIdx][3] = newReward;
 		
 		// print
-		printf("trial# %d learnt target = %f, pitch = %f, velocity = %f\n", numOfTrials, targetPitch, newState.pitch, newState.velocity);
-	}
-	
-	// check total number of trials
-	if((numOfTrials + 1) % MAX_NUM_OF_TRIALS == 0)
-	{
-		// print and log
-		printf("finish %d trials\n", MAX_NUM_OF_TRIALS);		
-		writeLog();
+		printf("finish %d trials, bad terminal target = %f, [pitch = %f, velocity = %f]\n", numOfTrials, targetPitch, newState.pitch, newState.velocity);
 
-		// return
-		return true;
+		isCompleted = true;
 	}
-	// check over time : [fail to learn]
+	// check over time : [fail to learn within time]
 	else if(startAtClock > 0 && (getMS() - startAtClock) > timePerTrialMs)
 	{
 		// increment and reset
 		numOfTrials ++;			// increment total number of trials
-		startAtClock = -1;		// restart time
+		//startAtClock = -1;		// restart time
 		numOfActionsInOneTrial = 0;	// reset counter of actions
 
 		// print
-		printf("trial# %d restart\n", numOfTrials);
+		printf("finish %d trials, restart\n", numOfTrials);
+
+		isCompleted = true;
 	}
 
 	// update Q
@@ -122,9 +122,22 @@ bool KIQLearning::update(const tum_ardrone::filter_stateConstPtr statePtr)
 	{
 		Nsa[previousPitchIdx][previousVelocityIdx][previousActionIdx] ++;
 		Q[previousPitchIdx][previousVelocityIdx][previousActionIdx] += alpha(Nsa[previousPitchIdx][previousVelocityIdx][previousActionIdx]) *(previousReward + 0.9 * maxQ(newState) - Q[previousPitchIdx][previousVelocityIdx][previousActionIdx]);
-		
 	}else{
 		startAtClock = getMS();
+	}
+	
+	// learnt or run out of time
+	if (isCompleted)
+	{
+		writeLog();
+		return true;
+	}
+
+	// waiting for action to take effect
+	if (numOfUpdate % MAX_NUM_OF_UPDATES_PER_STEP != 0)
+	{
+		numOfUpdate++;
+		return false;
 	}
 
 	// update previous
@@ -132,9 +145,8 @@ bool KIQLearning::update(const tum_ardrone::filter_stateConstPtr statePtr)
 	previousVelocityIdx = velocityIdx;
 	previousActionIdx = actionIdxWithMaxF(newState);
 	previousReward = newReward;
-	//printf("PitchIdx: %d, VelocityIdx: %d, Action: %d, Qsa: %f, Nsa: %d, steps: %d\n", previousPitchIdx, previousVelocityIdx, previousActionIdx, Q[previousPitchIdx][previousVelocityIdx][previousActionIdx], Nsa[previousPitchIdx][previousVelocityIdx][previousActionIdx], numOfActionsInOneTrial);
-
-	// take action!
+	
+	// take action: [fail to learn but still have time]
 	numOfActionsInOneTrial ++;
 	node->sendControlToDrone(indexToControlCommand(previousActionIdx));
 	return false;	// not done yet (!)
@@ -145,12 +157,13 @@ void KIQLearning::writeLog()
 	std::ofstream outfile (qlogFileName.c_str());
 	if(outfile.is_open())
 	{
-		outfile << numOfTrials << "\t" << numOfUpdate << "\n";
-		for(int i = 0; i < 36; i++){
-			for(int j = 0; j < 10; j++){
-				for(int k = 0; k < 7; k++){
-					outfile << Q[i][j][k] << "\t" << Nsa[i][j][k] << "\n";
+		outfile << numOfTrials << "\t" << numOfSuccess << "\n";
+		for(int i = 0; i < 25; i++){
+			for(int j = 0; j < 11; j++){
+				for(int k = 0; k < 3; k++){
+					outfile << Q[i][j][k] << "\t" << Nsa[i][j][k] << "\t";
 				}
+				outfile << "\n";
 			}	
 		}
 		outfile.close();
