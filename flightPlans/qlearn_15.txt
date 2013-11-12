@@ -1,4 +1,4 @@
-qlearn 15 1
+qlearn 15 2
 
 setInitialReachDist 0.5
 setStayWithinDist 0.5

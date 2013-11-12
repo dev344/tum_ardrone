@@ -64,9 +64,19 @@ KIQLearning::~KIQLearning(void)
 
 bool KIQLearning::update(const tum_ardrone::filter_stateConstPtr statePtr)
 {
+	
 	// perceive
 	double pitch = statePtr->pitch;
 	double velocity = statePtr->dy;
+	
+	if (startAtClock < 0)
+	{
+		if (!(abs(pitch) < 2 && velocity <= 0 && velocity >= -0.3))
+		{
+			return false;
+		}
+	}
+
 	LearningState newState = LearningState(pitch, velocity);
 	double newReward = reward(newState);
 
@@ -82,7 +92,7 @@ bool KIQLearning::update(const tum_ardrone::filter_stateConstPtr statePtr)
 		//startAtClock = -1;		// restart time
 		numOfActionsInOneTrial = 0;	// reset counter of actions
 		
-		Q[pitchIdx][velocityIdx][3] = newReward;
+		Q[pitchIdx][velocityIdx][2] = newReward;
 
 		// print
 		printf("finish %d trials, good terminal target = %f, [pitch = %f, velocity = %f]\n", numOfTrials, targetPitch, newState.pitch, newState.velocity);
@@ -96,7 +106,7 @@ bool KIQLearning::update(const tum_ardrone::filter_stateConstPtr statePtr)
 		//startAtClock = -1;		// restart time
 		numOfActionsInOneTrial = 0;	// reset counter of actions
 		
-		Q[pitchIdx][velocityIdx][3] = newReward;
+		Q[pitchIdx][velocityIdx][2] = newReward;
 		
 		// print
 		printf("finish %d trials, bad terminal target = %f, [pitch = %f, velocity = %f]\n", numOfTrials, targetPitch, newState.pitch, newState.velocity);

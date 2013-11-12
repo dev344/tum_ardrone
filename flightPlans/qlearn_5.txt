@@ -1,7 +1,7 @@
-qlearn 20 2
+qlearn 5 2
 
-setStayTime 0.1
 setInitialReachDist 0.5
 setStayWithinDist 0.5
+setStayTime 0.1
 goto 0 0 0 0
 

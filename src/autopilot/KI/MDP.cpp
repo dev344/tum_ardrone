@@ -1,4 +1,5 @@
 #include "MDP.h"
+#include <cstdlib>
 
 MDP::MDP(int target, double param, double acceleration, int maxPitch)
 {
@@ -6,10 +7,31 @@ MDP::MDP(int target, double param, double acceleration, int maxPitch)
 	unknownParam = param;
 	unknownAcceleration = acceleration;
 	unknownMaxPitch = maxPitch;
-	for (int i = 0; i < 25; i++)
-		for (int j = 0; j < 11; j++)
-			for (int k = 0; k < 25; k++)
-				S[i][j][k] = MDPState(i * 4 - 50 + 2, j * 6 - 33 + 3, k * 4 - 50 + 2);
+	for (int i = 0; i < 101; i++)
+		for (int j = 0; j < 61; j++)
+			for (int k = 0; k < 101; k++)
+				S[i][j][k] = MDPState(i - 50, j - 30, k - 50);
+
+	// normal distributions
+	normalParamFileName = "normalParam.txt";
+	infile.open(normalParamFileName.c_str());
+	if (infile.is_open())
+	{
+		for (int i = 0; i < 20; i++)
+		{
+			infile >> normalParamAscend[i][0] >> normalParamAscend[i][1];
+			//distAscend[i] = std::normal_distribution<double> dist(normalParamAscend[i][0], normalParamAscend[i][1]);
+		}
+		for (int i = 0; i < 20; i++)
+		{
+			infile >> normalParamDescend[i][0] >> normalParamDescend[i][1];
+			//distDescend[i] = std::normal_distribution<double> dist(normalParamDescend[i][0], normalParamDescend[i][1]);
+		}
+	}
+	else
+	{
+		printf("cannot find param file: normalParam.txt\n");
+	}
 }
 
 MDP::~MDP(void)
@@ -52,7 +74,7 @@ int MDP::solveForNewEnergy(int old_energy, int old_pitch, int a)
 			}
 			else
 			{
-				return -old_pitch;
+				return -std::min(unknownMaxPitch, old_pitch);
 			}
 		}
 		else
@@ -84,7 +106,7 @@ int MDP::solveForNewEnergy(int old_energy, int old_pitch, int a)
 		{
 			if (a > 0)
 			{
-				return -old_pitch;
+				return std::min(unknownMaxPitch, -old_pitch);
 			}
 			else
 			{
@@ -98,50 +120,67 @@ double MDP::solveForNewPitch(int old_pitch, int new_energy, int a)
 {
 	if (new_energy == 0)
 	{
-		if (old_pitch > 0)
+		if (old_pitch == 0)
 		{
 			if (a > 0)
 			{
-				return old_pitch + solveForStepSize(std::max(0, unknownMaxPitch - old_pitch)) * unknownParam;
+				return solveForStepSizeAscend(0, unknownMaxPitch) * unknownParam;
 			}
 			else
 			{
-				return old_pitch - solveForStepSize(old_pitch) * unknownParam;
+				return -solveForStepSizeAscend(0, unknownMaxPitch) * unknownParam;
 			}
 		}
-		else
+		else if (old_pitch > 0)
 		{
 			if (a > 0)
 			{
-				return old_pitch + solveForStepSize(-old_pitch) * unknownParam;
+				return old_pitch + solveForStepSizeAscend(old_pitch, unknownMaxPitch) * unknownParam;
 			}
 			else
 			{
-				return old_pitch - solveForStepSize(std::max(0, unknownMaxPitch + old_pitch)) * unknownParam;
+				exit(10);
+				return -111111;
+				// return old_pitch - solveForStepSizeDescend(old_pitch, -new_energy);
+			}
+		}
+		else	// old_pitch < 0
+		{
+			if (a > 0)
+			{
+				exit(11);
+				return -222222;
+				// return old_pitch + solveForStepSizeDescend(-old_pitch, new_energy);
+			}
+			else
+			{
+				return old_pitch - solveForStepSizeAscend(-old_pitch, unknownMaxPitch) * unknownParam;
 			}
 		}
 	}
 	else if (new_energy > 0)
 	{
-		if (old_pitch > 0)
+		if (old_pitch >= 0)	// the equal sign is important here
 		{
 			if (a > 0)
 			{
-				return old_pitch + solveForStepSize(std::max(0, unknownMaxPitch + new_energy - old_pitch)) * unknownParam;
+				return old_pitch + solveForStepSizeAscend(old_pitch, unknownMaxPitch + new_energy) * unknownParam;
 			}
 			else
 			{
+				exit(1);
 				return -999999;
 			}
 		}
-		else
+		else	// old_pitch < 0
 		{
 			if (a > 0)
 			{
-				return old_pitch + solveForStepSize(-old_pitch) * unknownParam;
+				return old_pitch + solveForStepSizeDescend(-old_pitch, new_energy) * unknownParam;
 			}
 			else
 			{
+				exit(2);
 				return -888888;
 			}
 		}
@@ -152,22 +191,24 @@ double MDP::solveForNewPitch(int old_pitch, int new_energy, int a)
 		{
 			if (a > 0)
 			{
+				exit(3);
 				return -777777;
 			}
 			else
 			{
-				return old_pitch - solveForStepSize(old_pitch) * unknownParam;
+				return old_pitch - solveForStepSizeDescend(old_pitch, -new_energy) * unknownParam;
 			}
 		}
-		else
+		else	// old_pitch <= 0, the equal sign is important here
 		{
 			if (a > 0)
 			{
+				exit(4);
 				return -666666;
 			}
 			else
 			{
-				return old_pitch - solveForStepSize(std::max(0, unknownMaxPitch - new_energy + old_pitch)) * unknownParam;
+				return old_pitch - solveForStepSizeAscend(-old_pitch, unknownMaxPitch - new_energy) * unknownParam;
 			}
 		}
 	}

@@ -46,7 +46,7 @@ private:
 	
 	inline int pitchToIndex(double pitch)
 	{
-		return std::max(0, std::min(14, (int)(pitch + 50)/4));
+		return std::max(0, std::min(24, (int)(pitch + 50)/4));
 	};
 	
 	inline int velocityToIndex(double velocity)
@@ -70,7 +70,7 @@ private:
 		// if pitch is positive but velocity is still positive
 		// OR if pitch is negative but velocity is still negative
 		// Usually, when pitch is positive, velocity should be negative
-		return abs(s.pitch - targetPitch) < 2 && s.pitch * s.velocity > 0;
+		return abs(s.pitch - targetPitch) < 2 && s.pitch * s.velocity >= 0;
 	};
 	
 	inline bool isBadTerminal(LearningState s)
