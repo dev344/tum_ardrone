@@ -1,19 +1,19 @@
-setLineSpeed 0.5
+setLineSpeed 0.3
 setReference $POSE$
 
 setStayTime 1
-goto -0.5 0 0.5 0
-setStayTime 2
+goto -1 0 1 0
+setStayTime 5
 goAlong 1 0 0 0
 
 setStayTime 1
-goto -0.5 0 0 0
-setStayTime 2
+goto -1 0 0 0
+setStayTime 5
 goAlong 1 0 0 0
 
 setStayTime 1
-goto -0.5 0 -0.5 0
-setStayTime 2
+goto -1 0 -1 0
+setStayTime 5
 goAlong 1 0 0 0
 
 goto 0 0 0 0

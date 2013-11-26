@@ -1,6 +1,6 @@
 setReference $POSE$
 setLineSpeed 0.5
-setStayTime 15
+setStayTime 35
 circle 0 1.5 0
 
 land

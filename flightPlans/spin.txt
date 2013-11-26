@@ -1,4 +1,4 @@
-setStayTime 20
+setStayTime 25
 goAlong 0 0 0 0.5
 setStayTime 1
 
