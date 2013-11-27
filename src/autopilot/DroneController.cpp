@@ -30,8 +30,9 @@ DroneController::DroneController(void)
 	targetValid = false;
 	
 	/* START [ziquan] */
-	direction = DronePosition(TooN::makeVector(0.0,0.0,0.0),0.0);
-	lineSpeed = 1.0;	
+	direction = TooN::makeVector(0.0,0.0,0.0);
+	lineSpeed = 0.0;
+	spinSpeed = 0.0;
 	/* END [ziquan] */
 
 	last_err[2] = 0;
@@ -95,8 +96,7 @@ void DroneController::setTarget(DronePosition newTarget)
 	target = newTarget;
 	
 	/* START [ziquan] */
-	target.pos += direction.pos * lineSpeed;
-	target.yaw += direction.yaw;
+	target.pos += direction * lineSpeed;
 	/* END [ziquan] */
 
 	target.yaw = angleFromTo2(target.yaw,-180,180);
@@ -125,38 +125,57 @@ void DroneController::clearTarget()
 }
 
 /* START [ziquan] */
-void DroneController::setDirection(DronePosition newDirection, double newSpeed)
+void DroneController::setDirection(TooN::Vector<3> newDirection, double newSpeed)
 {
 	direction = newDirection;
 
-	double temp = direction.pos * direction.pos;
+	double temp = direction * direction;
 	if(temp < 0.1)
 	{
-		direction.pos[0] = direction.pos[1] = direction.pos[2] = 0;
+		direction[0] = direction[1] = direction[2] = 0;
 	}else{
-		direction.pos[0] /= sqrt(temp);
-		direction.pos[1] /= sqrt(temp);
-		direction.pos[2] /= sqrt(temp);
+		direction[0] /= sqrt(temp);
+		direction[1] /= sqrt(temp);
+		direction[2] /= sqrt(temp);
 	}
 	lineSpeed = newSpeed;
 
 	char buf[200];
-	snprintf(buf,200,"New Direction and Speed: xyz = %.3f, %.3f, %.3f,  yaw=%.3f, lineSpeed=%.3f", direction.pos[0],direction.pos[1],direction.pos[2],direction.yaw,lineSpeed);
+	snprintf(buf,200,"New Direction and Speed: xyz = %.3f, %.3f, %.3f, lineSpeed=%.3f", direction[0],direction[1],direction[2],lineSpeed);
 	ROS_INFO(buf);
 
 	if(node != NULL)
 		node->publishCommand(std::string("u l ") + buf);
 }
 
-DronePosition DroneController::getCurrentDirection()
+TooN::Vector<3> DroneController::getCurrentDirection()
 {
 	return direction;
 }
 
+double DroneController::getCurrentLineSpeed()
+{
+	return lineSpeed;
+}
+
 void DroneController::clearDirection()
 {
-	
-	direction.pos[0] = direction.pos[1] = direction.pos[2] = direction.yaw = 0;
+	direction[0] = direction[1] = direction[2] = 0;
+}
+
+double DroneController::setSpinSpeed(double newSpeed)
+{
+	spinSpeed = newSpeed;
+}
+
+double DroneController::getCurrentSpinSpeed()
+{
+	return spinSpeed;
+}
+
+void DroneController::clearSpin()
+{
+	spinSpeed = 0.0;
 }
 /* END [ziquan] */
 

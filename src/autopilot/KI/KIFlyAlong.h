@@ -9,23 +9,20 @@
 class KIFlyAlong : public KIProcedure
 {
 private:
-	int startAtClock;
 	bool directionSet;
 	bool isCompleted;
 
-	int stayTimeMs;
-	double maxControlFactor;
-
-	DronePosition checkpoint;
-	DronePosition direction;
+	DronePosition startPosition;
+	TooN::Vector<3> checkpoint;
+	TooN::Vector<3> direction;
 	double lineSpeed;
+	double distance;
 
 public:
-	KIFlyAlong(DronePosition checkpointP, 
-		DronePosition directionP,
-		double lineSpeedP = 0.1,
-		double stayTime = 2,
-		double maxControlFactorP = 1);
+	KIFlyAlong(DronePosition startPositionP,
+		TooN::Vector<3> directionP,
+		double lineSpeedP = 0.5,
+		double distanceP = 1);
 
 	~KIFlyAlong(void);
 	bool update(const tum_ardrone::filter_stateConstPtr statePtr);

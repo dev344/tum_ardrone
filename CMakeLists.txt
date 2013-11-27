@@ -117,11 +117,12 @@ set(AUTOPILOT_SOURCE_FILES
 	src/autopilot/KI/KILand.cpp
 	src/autopilot/KI/KIAutoInit.cpp
 	src/autopilot/KI/KIFlyTo.cpp
-	src/autopilot/KI/KIFlyAlong.cpp	# [ziquan]
+	src/autopilot/KI/KIFlyAlong.cpp		# [ziquan]
+	src/autopilot/KI/KISpin.cpp		# [ziquan]
 	src/autopilot/KI/KICircle.cpp		# [ziquan]
 	src/autopilot/KI/KIQLearning.cpp	# [ziquan]
 	src/autopilot/KI/KIModel.cpp		# [ziquan]
-	src/autopilot/KI/MDP.cpp			# [ziquan]
+	src/autopilot/KI/MDP.cpp		# [ziquan]
 )
 set(AUTOPILOT_HEADER_FILES        
 	src/autopilot/ControlNode.h
@@ -130,10 +131,11 @@ set(AUTOPILOT_HEADER_FILES
 	src/autopilot/KI/KIAutoInit.h
 	src/autopilot/KI/KIFlyTo.h
 	src/autopilot/KI/KIFlyAlong.h		# [ziquan]
+	src/autopilot/KI/KISpin.h		# [ziquan]
 	src/autopilot/KI/KICircle.h		# [ziquan]
-	src/autopilot/KI/KIQLearning.h	# [ziquan]
-	src/autopilot/KI/KIModel.h			# [ziquan]
-	src/autopilot/KI/MDP.h				# [ziquan]
+	src/autopilot/KI/KIQLearning.h		# [ziquan]
+	src/autopilot/KI/KIModel.h		# [ziquan]
+	src/autopilot/KI/MDP.h			# [ziquan]
 	src/autopilot/KI/KIProcedure.h
 )
 

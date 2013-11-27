@@ -42,6 +42,7 @@ bool KICircle::update(const tum_ardrone::filter_stateConstPtr statePtr)
 	if(!isCompleted && startAtClock >= 0 && ((getMS() - startAtClock) > stayTimeMs))
 	{
 		controller->clearDirection();
+		controller->clearSpin();
 		printf("circle done!\n");
 		isCompleted = true;
 	}
@@ -59,7 +60,7 @@ bool KICircle::update(const tum_ardrone::filter_stateConstPtr statePtr)
 
 	// set direction and lineSpeed
 	TooN::Vector<3> dirVector = diffVector ^ upVector;	// vector of direction = diff x up
-	controller->setDirection(DronePosition(dirVector, 0.0), lineSpeed);
+	controller->setDirection(dirVector, lineSpeed);
 	
 	// compute target pos
 	TooN::Vector<3> radiusVector = upVector ^ dirVector;	// vector away from centre = up x direction

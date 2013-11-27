@@ -37,6 +37,7 @@
 #include "KI/KIFlyTo.h"
 #include "KI/KILand.h"
 #include "KI/KIFlyAlong.h"	//[ziquan]
+#include "KI/KISpin.h"		//[ziquan]
 #include "KI/KICircle.h"	//[ziquan]
 #include "KI/KIQLearning.h"	//[ziquan]
 #include "KI/KIModel.h"		//[ziquan]
@@ -244,6 +245,13 @@ void ControlNode::popNextCommand(const tum_ardrone::filter_stateConstPtr statePt
 			commandUnderstood = true;
 		}
 
+		// setSpinSpeed [ziquan]
+		else if(sscanf(command.c_str(),"setSpinSpeed %f",&parameters[0]) == 1)
+		{
+			parameter_SpinSpeed = parameters[0];
+			commandUnderstood = true;
+		}
+
 		// goto
 		else if(sscanf(command.c_str(),"goto %f %f %f %f",&parameters[0], &parameters[1], &parameters[2], &parameters[3]) == 4)
 		{
@@ -314,33 +322,34 @@ void ControlNode::popNextCommand(const tum_ardrone::filter_stateConstPtr statePt
 		else if(sscanf(command.c_str(),"goAlong %f %f %f %f",&parameters[0], &parameters[1], &parameters[2], &parameters[3]) == 4)
 		{
 			currentKI = new KIFlyAlong(
+				// current position
 				DronePosition(TooN::makeVector(statePtr->x,statePtr->y,statePtr->z), statePtr->yaw),
-				DronePosition(TooN::makeVector(parameters[0],parameters[1],parameters[2]), parameters[3]),		
+				// direction
+				TooN::makeVector(parameters[0],parameters[1],parameters[2]),
+				// line speed
 				parameter_LineSpeed,
-				parameter_StayTime,
-				parameter_MaxControl
+				// distance
+				parameters[3]
 				);
 			currentKI->setPointers(this,&controller);
 			commandUnderstood = true;
 		}
 
-		// goAlongFrom [ziquan]
-		else if(sscanf(command.c_str(),"goAlongFrom %f %f %f %f %f %f %f %f",&parameters[0], &parameters[1], &parameters[2], &parameters[3], &parameters[4], &parameters[5], &parameters[6], &parameters[7]) == 8)
+		// spin [ziquan]
+		else if(sscanf(command.c_str(),"spin %f",&parameters[0]) == 1)
 		{
-			currentKI = new KIFlyAlong(
-				// from
-				DronePosition(
-				TooN::makeVector(parameters[4],parameters[5],parameters[6]) + parameter_referenceZero.pos,
-					parameters[7] + parameter_referenceZero.yaw),
-				// along
-				DronePosition(TooN::makeVector(parameters[0],parameters[1],parameters[2]), parameters[3]),	
-				parameter_LineSpeed,
-				parameter_StayTime,
-				parameter_MaxControl
+			currentKI = new KISpin(
+				// current position
+				DronePosition(TooN::makeVector(statePtr->x,statePtr->y,statePtr->z), statePtr->yaw),
+				// line speed
+				parameter_SpinSpeed,
+				// distance
+				parameters[0]
 				);
 			currentKI->setPointers(this,&controller);
 			commandUnderstood = true;
 		}
+
 		// circle [ziquan]
 		else if(sscanf(command.c_str(),"circle %f %f %f",&parameters[0], &parameters[1], &parameters[2]) == 3)
 		{

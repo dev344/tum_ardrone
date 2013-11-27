@@ -4,26 +4,23 @@
 #include "../../HelperFunctions.h"
 
 
-KIFlyAlong::KIFlyAlong(DronePosition checkpointP, 
-		DronePosition directionP,
+KIFlyAlong::KIFlyAlong(DronePosition startPositionP,
+		TooN::Vector<3> directionP,
 		double lineSpeedP,
-		double stayTime,
-		double maxControlFactorP
+		double distanceP
 		)
 {
-	stayTimeMs = (int)(1000*stayTime);
-	maxControlFactor = maxControlFactorP;
-
-	checkpoint = checkpointP;
+	startPosition = startPositionP;
+	checkpoint = startPositionP.pos;
 	direction = directionP;
 	lineSpeed = lineSpeedP;
+	distance = distanceP;
 
-	startAtClock = -1;
 	directionSet = false;
 	isCompleted = false;
 
 	char buf[200];
-	snprintf(buf,200,"goAlong %.2f %.2f %.2f %.2f, v=%.2f, t=%dms", directionP.pos[0], directionP.pos[1], directionP.pos[2], directionP.yaw, lineSpeedP, stayTimeMs);
+	snprintf(buf,200,"goAlong %.2f %.2f %.2f, v=%.2f, distance=%.2fm", directionP[0], directionP[1], directionP[2], lineSpeedP, distanceP);
 	command = buf;
 }
 
@@ -35,43 +32,37 @@ KIFlyAlong::~KIFlyAlong(void)
 
 bool KIFlyAlong::update(const tum_ardrone::filter_stateConstPtr statePtr)
 {
-	// set direction and lineSpeed
-	if(!directionSet)
-	{
-		controller->setDirection(direction, lineSpeed);
-	}
-	directionSet = true;
-
-	// time reached?
-	if(!isCompleted && startAtClock >= 0 && ((getMS() - startAtClock) > stayTimeMs))
-	{
-		controller->clearDirection();
-		printf("line done!\n");
-		isCompleted = true;
-	}
 	if(isCompleted)
 	{
 		node->sendControlToDrone(controller->update(statePtr));
 		return true;
 	}
 
-	// set target
-	if(direction.pos * direction.pos > 0.01)
+	// set direction and lineSpeed
+	if(!directionSet)
 	{
-		TooN::Vector<3> diffs = TooN::makeVector(
-				statePtr->x - checkpoint.pos[0],
-				statePtr->y - checkpoint.pos[1],
-				statePtr->z - checkpoint.pos[2]);
-		checkpoint.pos += direction.pos * ((diffs * direction.pos) / (direction.pos * direction.pos));	// checkpoint update
+		controller->setDirection(direction, lineSpeed);
+		direction = controller->getCurrentDirection();	// unified vector
 	}
-	checkpoint.yaw += direction.yaw;
-	controller->setTarget(checkpoint);
+	directionSet = true;
+
+	// get current position
+	TooN::Vector<3> currentpoint = TooN::makeVector(statePtr->x, statePtr->y, statePtr->z);
 	
-	if (startAtClock < 0)
+	// distance reached?
+	TooN::Vector<3> diffs = currentpoint - startPosition.pos;
+	if ((diffs * direction) / (direction * direction) >= distance)
 	{
-		startAtClock = getMS();
-		printf("start moving along a line.\n");
+		controller->clearDirection();
+		printf("line done!\n");
+		isCompleted = true;
+		return false;
 	}
+
+	// set target
+	diffs = currentpoint - checkpoint;
+	checkpoint += direction * ((diffs * direction) / (direction * direction));	// checkpoint update	
+	controller->setTarget(DronePosition(checkpoint, startPosition.yaw));
 
 	// control!
 	node->sendControlToDrone(controller->update(statePtr));

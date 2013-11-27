@@ -1,12 +1,11 @@
-setStayTime 5
 setLineSpeed 0.3
-goAlong 0 1 0 0
-goAlong 0 -1 0 0
+goAlong 0 1 0 2
+goAlong 0 -1 0 2
 
-goAlong -1 0 0 0
-goAlong 1 0 0 0
+goAlong -1 0 0 2
+goAlong 1 0 0 2
 
-goAlong 0 0 1 0
-goAlong 0 0 -1 0
+goAlong 0 0 1 1
+goAlong 0 0 -1 1
 
 land

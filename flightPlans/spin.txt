@@ -1,5 +1,4 @@
-setStayTime 25
-goAlong 0 0 0 0.5
-setStayTime 1
+setSpinSpeed 0.5
+spin 90
 
 land

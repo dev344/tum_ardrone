@@ -20,9 +20,6 @@
  */
 #ifndef __DRONECONTROLLER_H
 #define __DRONECONTROLLER_H
- 
- 
- 
 
 #include "TooN/se3.h"
 #include <queue>
@@ -65,8 +62,11 @@ private:
 	bool targetValid;
 
 	// used for moving along a line
-	DronePosition direction;		// the vector of moving direction [ziquan]
+	TooN::Vector<3> direction;		// the vector of moving direction [ziquan]
 	double lineSpeed;
+
+	// used for spinning
+	double spinSpeed;			// spinning direction and speed [ziquan]
 
 	// used for integral term
 	TooN::Vector<4> targetNew;	// 0=target has been reached before
@@ -103,9 +103,16 @@ public:
 	ControlCommand getLastControl();
 
 	/* START [ziquan] */
-	void setDirection(DronePosition newDirection, double newSpeed);
-	DronePosition getCurrentDirection();
+	// direction
+	void setDirection(TooN::Vector<3> newDirection, double newSpeed);
+	TooN::Vector<3> getCurrentDirection();
+	double getCurrentLineSpeed();
 	void clearDirection();
+	// spin
+	double setSpinSpeed(double newSpeed);
+	double getCurrentSpinSpeed();
+	// clear
+	void clearSpin();
 	/* END [ziquan] */
 
 
