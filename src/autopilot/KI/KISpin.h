@@ -20,7 +20,7 @@ private:
 public:
 	KISpin(DronePosition startPositionP,
 		double spinSpeedP = 0.5,
-		double distanceP = 360);
+		double distanceP = 180);
 
 	~KISpin(void);
 	bool update(const tum_ardrone::filter_stateConstPtr statePtr);

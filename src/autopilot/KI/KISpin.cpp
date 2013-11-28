@@ -12,14 +12,14 @@ KISpin::KISpin(DronePosition startPositionP,
 	startPosition = startPositionP;
 	spinSpeed = spinSpeedP;
 	distance = distanceP;
-
+	
 	checkpoint = 0;
-
+	
 	spinSet = false;
 	isCompleted = false;
 
 	char buf[200];
-	snprintf(buf,200,"spin %.2f, distance=%.2fdegree", spinSpeedP, distanceP);
+	snprintf(buf,200,"spin v=%.2f, d=%.2fdegree", spinSpeedP, distanceP);
 	command = buf;
 }
 
@@ -43,29 +43,28 @@ bool KISpin::update(const tum_ardrone::filter_stateConstPtr statePtr)
 		controller->setSpinSpeed(spinSpeed);
 	}
 	spinSet = true;
-	
-	// distance reached?
-	if (checkpoint >= distance)
+
+	// checkpoint reached?
+	double diff = startPosition.yaw + checkpoint - statePtr->yaw;
+	while(diff < -180) diff += 360;
+	while(diff >=  180) diff -= 360;
+	if (fabs(diff) < std::min(90.0, 10*fabs(spinSpeed)))
 	{
-		controller->clearSpin();
-		printf("spin done!\n");
-		isCompleted = true;
-		return false;
+		// distance reached?
+		if (fabs(checkpoint) >= distance)
+		{
+			controller->clearSpin();
+			printf("spin done!\n");
+			isCompleted = true;
+			return false;
+		}
+		checkpoint += spinSpeed;
 	}
 
 	// set target
 	controller->setTarget(DronePosition(startPosition.pos, startPosition.yaw + checkpoint));
 
-	// checkpoint reached?
-	int diff = startPosition.yaw + checkpoint - statePtr->yaw;
-	while(diff < -180) diff += 360;
-	while(diff >=  180) diff -= 360;
-	
-	if (abs(diff) < 1)
-	{
-		checkpoint += spinSpeed;
-	}
-	
+
 	// control!
 	node->sendControlToDrone(controller->update(statePtr));
 	return false;	// not done yet (!)
