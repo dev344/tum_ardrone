@@ -61,10 +61,6 @@ private:
 	DronePosition target;
 	bool targetValid;
 
-	// used for moving along a line
-	//TooN::Vector<3> direction;		// the vector of moving direction [ziquan]
-	//double lineSpeed;
-
 	// used for integral term
 	TooN::Vector<4> targetNew;	// 0=target has been reached before
 								// 1=target is new
@@ -98,20 +94,6 @@ public:
 	void clearTarget();
 	DronePosition getCurrentTarget();	
 	ControlCommand getLastControl();
-
-	/* START [ziquan] 
-	// direction
-	void setDirection(TooN::Vector<3> newDirection, double newSpeed);
-	TooN::Vector<3> getCurrentDirection();
-	double getCurrentLineSpeed();
-	void clearDirection();
-	// spin
-	double setSpinSpeed(double newSpeed);
-	double getCurrentSpinSpeed();
-	// clear
-	void clearSpin();
-	END [ziquan] */
-
 
 	// gets last error
 	TooN::Vector<4> getLastErr();

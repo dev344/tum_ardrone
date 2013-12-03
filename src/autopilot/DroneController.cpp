@@ -22,19 +22,12 @@
 #include "gvars3/instances.h"
 #include "../HelperFunctions.h"
 #include "ControlNode.h"
-#include <cmath>	// [ziquan]
 
 DroneController::DroneController(void)
 {
 	target = DronePosition(TooN::makeVector(0.0,0.0,0.0),0.0);
 	targetValid = false;
 	
-	/* START [ziquan] 
-	direction = TooN::makeVector(0.0,0.0,0.0);
-	lineSpeed = 0.0;
-	spinSpeed = 0.0;
-	 END [ziquan] */
-
 	last_err[2] = 0;
 	lastTimeStamp = 0;
 
@@ -119,61 +112,6 @@ void DroneController::clearTarget()
 {
 	targetValid = false;
 }
-
-/* START [ziquan] 
-void DroneController::setDirection(TooN::Vector<3> newDirection, double newSpeed)
-{
-	direction = newDirection;
-
-	double temp = direction * direction;
-	if(temp < 0.1)
-	{
-		direction[0] = direction[1] = direction[2] = 0;
-	}else{
-		direction[0] /= sqrt(temp);
-		direction[1] /= sqrt(temp);
-		direction[2] /= sqrt(temp);
-	}
-	lineSpeed = newSpeed;
-
-	char buf[200];
-	snprintf(buf,200,"New Direction and Speed: xyz = %.3f, %.3f, %.3f, lineSpeed=%.3f", direction[0],direction[1],direction[2],lineSpeed);
-	ROS_INFO(buf);
-
-	if(node != NULL)
-		node->publishCommand(std::string("u l ") + buf);
-}
-
-TooN::Vector<3> DroneController::getCurrentDirection()
-{
-	return direction;
-}
-
-double DroneController::getCurrentLineSpeed()
-{
-	return lineSpeed;
-}
-
-void DroneController::clearDirection()
-{
-	direction[0] = direction[1] = direction[2] = 0;
-}
-
-double DroneController::setSpinSpeed(double newSpeed)
-{
-	spinSpeed = newSpeed;
-}
-
-double DroneController::getCurrentSpinSpeed()
-{
-	return spinSpeed;
-}
-
-void DroneController::clearSpin()
-{
-	spinSpeed = 0.0;
-}
- END [ziquan] */
 
 void i_term_increase(double& i_term, double new_err, double cap)
 {

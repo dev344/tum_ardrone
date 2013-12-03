@@ -37,7 +37,6 @@ private:
 	double initialReachedDist;
 	double stayWithinDist;
 
-
 	DronePosition checkpoint;
 
 public:
