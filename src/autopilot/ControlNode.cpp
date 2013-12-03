@@ -351,7 +351,7 @@ void ControlNode::popNextCommand(const tum_ardrone::filter_stateConstPtr statePt
 		}
 
 		// circle [ziquan]
-		else if(sscanf(command.c_str(),"circle %f %f %f",&parameters[0], &parameters[1], &parameters[2]) == 3)
+		else if(sscanf(command.c_str(),"circle %f %f %f %f",&parameters[0], &parameters[1], &parameters[2], &parameters[3]) == 4)
 		{
 			currentKI = new KICircle(
 				// current position
@@ -361,8 +361,7 @@ void ControlNode::popNextCommand(const tum_ardrone::filter_stateConstPtr statePt
 				// upVector
 				TooN::makeVector(0.0, 0.0, 1.0),
 				parameter_LineSpeed,
-				parameter_StayTime,
-				parameter_MaxControl
+				parameters[3]
 				);
 			currentKI->setPointers(this,&controller);
 			commandUnderstood = true;

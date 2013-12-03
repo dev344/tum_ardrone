@@ -12,10 +12,9 @@ KIFlyAlong::KIFlyAlong(DronePosition startPositionP,
 {
 	startPosition = startPositionP;
 	checkpoint = startPositionP.pos;
-	direction = directionP;
+	direction = unifyVector(directionP);
 	lineSpeed = lineSpeedP;
 	distance = distanceP;
-
 	directionSet = false;
 	isCompleted = false;
 
@@ -38,14 +37,6 @@ bool KIFlyAlong::update(const tum_ardrone::filter_stateConstPtr statePtr)
 		return true;
 	}
 
-	// set direction and lineSpeed
-	if(!directionSet)
-	{
-		controller->setDirection(direction, lineSpeed);
-		direction = controller->getCurrentDirection();	// unified vector
-	}
-	directionSet = true;
-
 	// get current position
 	TooN::Vector<3> currentpoint = TooN::makeVector(statePtr->x, statePtr->y, statePtr->z);
 	
@@ -53,7 +44,7 @@ bool KIFlyAlong::update(const tum_ardrone::filter_stateConstPtr statePtr)
 	TooN::Vector<3> diffs = currentpoint - startPosition.pos;
 	if ((diffs * direction) / (direction * direction) >= distance)
 	{
-		controller->clearDirection();
+		//controller->clearDirection();
 		printf("line done!\n");
 		isCompleted = true;
 		return false;
@@ -62,7 +53,7 @@ bool KIFlyAlong::update(const tum_ardrone::filter_stateConstPtr statePtr)
 	// set target
 	diffs = currentpoint - checkpoint;
 	checkpoint += direction * ((diffs * direction) / (direction * direction));	// checkpoint update	
-	controller->setTarget(DronePosition(checkpoint, startPosition.yaw));
+	controller->setTarget(DronePosition(checkpoint + lineSpeed * direction, startPosition.yaw));
 
 	// control!
 	node->sendControlToDrone(controller->update(statePtr));

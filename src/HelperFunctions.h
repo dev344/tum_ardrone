@@ -114,4 +114,13 @@ inline static int getMS(ros::Time stamp = ros::Time::now())
 	return mss;
 }
 
+/* START [ziquan] */
+inline static TooN::Vector<3> unifyVector(TooN::Vector<3> vector)
+{
+	if(vector * vector < 0.1)
+		return TooN::makeVector(0.0,0.0,0.0);
+	return vector / sqrt(vector * vector);
+}
+/* END [ziquan] */
+
 #endif /* __HELPERFUNCTIONS_H */

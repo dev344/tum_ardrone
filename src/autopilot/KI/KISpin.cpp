@@ -37,13 +37,6 @@ bool KISpin::update(const tum_ardrone::filter_stateConstPtr statePtr)
 		return true;
 	}
 
-	// set direction and lineSpeed
-	if(!spinSet)
-	{
-		controller->setSpinSpeed(spinSpeed);
-	}
-	spinSet = true;
-
 	// checkpoint reached?
 	double diff = startPosition.yaw + checkpoint - statePtr->yaw;
 	while(diff < -180) diff += 360;
@@ -53,7 +46,6 @@ bool KISpin::update(const tum_ardrone::filter_stateConstPtr statePtr)
 		// distance reached?
 		if (fabs(checkpoint) >= distance)
 		{
-			controller->clearSpin();
 			printf("spin done!\n");
 			isCompleted = true;
 			return false;

@@ -11,24 +11,21 @@ class KICircle : public KIProcedure
 private:
 	double radius;
 	
-	int startAtClock;
 	bool isCompleted;
 
-	int stayTimeMs;
-	double maxControlFactor;
-
-	DronePosition checkpoint;
-	TooN::Vector<3> centerpos;
+	DronePosition startPosition;
+	DronePosition checkPosition;
+	TooN::Vector<3> centerPoint;
 	TooN::Vector<3> upVector;
 	double lineSpeed;
+	double targetAngle;
 
 public:
-	KICircle(DronePosition checkpointP, 
-		TooN::Vector<3> centerposP,
+	KICircle(DronePosition startPositionP,
+		TooN::Vector<3> centerPointP,
 		TooN::Vector<3> upVectorP,
-		double lineSpeedP = 0.1,
-		double stayTime = 2,
-		double maxControlFactorP = 1);
+		double lineSpeedP = 0.5,
+		double angleP = 360);
 
 	~KICircle(void);
 	bool update(const tum_ardrone::filter_stateConstPtr statePtr);

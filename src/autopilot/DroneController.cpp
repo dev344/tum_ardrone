@@ -29,11 +29,11 @@ DroneController::DroneController(void)
 	target = DronePosition(TooN::makeVector(0.0,0.0,0.0),0.0);
 	targetValid = false;
 	
-	/* START [ziquan] */
+	/* START [ziquan] 
 	direction = TooN::makeVector(0.0,0.0,0.0);
 	lineSpeed = 0.0;
 	spinSpeed = 0.0;
-	/* END [ziquan] */
+	 END [ziquan] */
 
 	last_err[2] = 0;
 	lastTimeStamp = 0;
@@ -94,10 +94,6 @@ ControlCommand DroneController::update(tum_ardrone::filter_stateConstPtr state)
 void DroneController::setTarget(DronePosition newTarget)
 {
 	target = newTarget;
-	
-	/* START [ziquan] */
-	target.pos += direction * lineSpeed;
-	/* END [ziquan] */
 
 	target.yaw = angleFromTo2(target.yaw,-180,180);
 	targetSetAtClock = getMS()/1000.0;
@@ -124,7 +120,7 @@ void DroneController::clearTarget()
 	targetValid = false;
 }
 
-/* START [ziquan] */
+/* START [ziquan] 
 void DroneController::setDirection(TooN::Vector<3> newDirection, double newSpeed)
 {
 	direction = newDirection;
@@ -177,7 +173,7 @@ void DroneController::clearSpin()
 {
 	spinSpeed = 0.0;
 }
-/* END [ziquan] */
+ END [ziquan] */
 
 void i_term_increase(double& i_term, double new_err, double cap)
 {
