@@ -1067,10 +1067,12 @@ bool PTAMWrapper::handleCommand(std::string s)
 	return true;
 }
 
+/* MODIFIED [ziquan] */
 void PTAMWrapper::on_mouse_down(CVD::ImageRef where, int state, int button)
 {
-	double x = 4*(where.x/(double)this->myGLWindow->size().x - 0.5);
-	double y = -4*(where.y/(double)this->myGLWindow->size().y - 0.5);
+	//double x = 4*(where.x/(double)this->myGLWindow->size().x - 0.5);
+	//double y = -4*(where.y/(double)this->myGLWindow->size().y - 0.5);
+	double theta = 92.0 * ((double)where.x - 0.5 * (double)this->myGLWindow->size().x)/sqrt((double)this->myGLWindow->size().x * (double)this->myGLWindow->size().x + (double)this->myGLWindow->size().y * (double)this->myGLWindow->size().y);
 	char bf[100];
 
 
@@ -1078,9 +1080,10 @@ void PTAMWrapper::on_mouse_down(CVD::ImageRef where, int state, int button)
 	node->publishCommand("c lockScaleFP");
 
 	if(button == 1)
-		snprintf(bf,100,"c moveByRel %.3f %.3f 0 0",x,y);
-	else
-		snprintf(bf,100,"c moveByRel 0 0 %.3f %.3f",y,x*45);
+		//snprintf(bf,100,"c moveByRel %.3f %.3f 0 0",x,y);
+		snprintf(bf,100,"c moveByRel 0 0 0 %.3f", theta);
+	//else
+		//snprintf(bf,100,"c moveByRel 0 0 %.3f %.3f",y,x*45);
 
 	node->publishCommand(bf);
 }

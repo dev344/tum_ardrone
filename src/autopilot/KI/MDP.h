@@ -58,7 +58,7 @@ private:
 	inline double solveForStepSizeAscend(int thetaCurrent, int thetaTop)
 	{
 		return normalParamAscend[std::max(0, std::min(19, (int)(20.0 * thetaCurrent / thetaTop)))][0] * thetaTop / 20.0;
-		// return distAscend[std::max(0, std::min(19, (int)(20.0 * thetaCurrent / thetaTop)))](generator) * thetaTop / 20.0;
+		//return distAscend[std::max(0, std::min(19, (int)(20.0 * thetaCurrent / thetaTop)))](generator) * thetaTop / 20.0;
 	};
 	
 	double	solveForNewPitch(int old_pitch, int new_energy, int a);

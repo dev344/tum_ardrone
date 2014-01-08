@@ -41,6 +41,7 @@
 #include "KI/KICircle.h"	//[ziquan]
 #include "KI/KIQLearning.h"	//[ziquan]
 #include "KI/KIModel.h"		//[ziquan]
+#include "KI/KIRepsExe.h"	//[ziquan]
 #include "KI/KIProcedure.h"
 
 
@@ -351,7 +352,7 @@ void ControlNode::popNextCommand(const tum_ardrone::filter_stateConstPtr statePt
 		}
 
 		// circle [ziquan]
-		else if(sscanf(command.c_str(),"circle %f %f %f",&parameters[0], &parameters[1], &parameters[2]) == 3)
+		else if(sscanf(command.c_str(),"circleL %f %f %f",&parameters[0], &parameters[1], &parameters[2]) == 3)
 		{
 			currentKI = new KICircle(
 				// current position
@@ -360,6 +361,23 @@ void ControlNode::popNextCommand(const tum_ardrone::filter_stateConstPtr statePt
 				TooN::makeVector(parameters[0], parameters[1], parameters[2]) + parameter_referenceZero.pos,
 				// upVector
 				TooN::makeVector(0.0, 0.0, 1.0),
+				parameter_LineSpeed,
+				parameter_StayTime
+				);
+			currentKI->setPointers(this,&controller);
+			commandUnderstood = true;
+		}
+
+		// circle [ziquan]
+		else if(sscanf(command.c_str(),"circleR %f %f %f",&parameters[0], &parameters[1], &parameters[2]) == 3)
+		{
+			currentKI = new KICircle(
+				// current position
+				DronePosition(TooN::makeVector(statePtr->x,statePtr->y,statePtr->z), statePtr->yaw),
+				// center
+				TooN::makeVector(parameters[0], parameters[1], parameters[2]) + parameter_referenceZero.pos,
+				// upVector
+				TooN::makeVector(0.0, 0.0, -1.0),
 				parameter_LineSpeed,
 				parameter_StayTime
 				);
@@ -377,6 +395,13 @@ void ControlNode::popNextCommand(const tum_ardrone::filter_stateConstPtr statePt
 		else if(sscanf(command.c_str(),"mlearn %f %f",&parameters[0], &parameters[1]) == 2)
 		{
 			currentKI = new KIModel((int)(parameters[0]), parameters[1]);
+			currentKI->setPointers(this,&controller);
+			commandUnderstood = true;
+		}
+		// Reps [ziquan]
+		else if(sscanf(command.c_str(),"reps %f %f",&parameters[0], &parameters[1]) == 2)
+		{
+			currentKI = new KIRepsExe(parameters[0], parameters[1]);
 			currentKI->setPointers(this,&controller);
 			commandUnderstood = true;
 		}
