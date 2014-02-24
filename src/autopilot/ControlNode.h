@@ -24,6 +24,7 @@
 #include "ros/ros.h"
 #include "geometry_msgs/Twist.h"
 #include "tum_ardrone/filter_state.h"
+#include <ardrone_autonomy/Navdata.h>
 #include "std_msgs/String.h"
 #include <dynamic_reconfigure/server.h>
 #include "tum_ardrone/AutopilotParamsConfig.h"
@@ -41,6 +42,7 @@ struct ControlNode
 {
 private:
 	ros::Subscriber dronepose_sub;
+	ros::Subscriber navdata_sub;
 	ros::Publisher vel_pub;
 	ros::Subscriber tum_ardrone_sub;
 	ros::Publisher tum_ardrone_pub;
@@ -55,6 +57,7 @@ private:
 	int minPublishFreq;
 	std::string control_channel;
 	std::string dronepose_channel;
+	std::string navdata_channel;
 	std::string command_channel;
 	std::string packagePath;
 	std::string land_channel;
@@ -84,6 +87,10 @@ private:
 	void reSendInfo();
 	char buf[500];
 	ControlCommand lastSentControl;
+
+
+	// [ziquan]
+	int altdMM;
 public:
 	ControlNode();
 	~ControlNode();
@@ -91,6 +98,7 @@ public:
 
 	// ROS message callbacks
 	void droneposeCb(const tum_ardrone::filter_stateConstPtr statePtr);
+	void navdataCb(const ardrone_autonomy::NavdataConstPtr navdataPtr);
 	void comCb(const std_msgs::StringConstPtr str);
 	void dynConfCb(tum_ardrone::AutopilotParamsConfig &config, uint32_t level);
 
