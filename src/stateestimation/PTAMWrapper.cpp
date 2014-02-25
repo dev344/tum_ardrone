@@ -1084,11 +1084,21 @@ void PTAMWrapper::on_mouse_down(CVD::ImageRef where, int state, int button) {
 	node->publishCommand("c clearCommands");
 	node->publishCommand("c lockScaleFP");
 
-	if (button == 1)
-		//snprintf(bf,100,"c moveByRel %.3f %.3f 0 0",x,y);
-		snprintf(bf, 100, "c GSV_goto %.3f %.3f", angle_x, angle_y);
-	else
-		//snprintf(bf,100,"c moveByRel 0 0 %.3f %.3f",y,x*45);
-		snprintf(bf, 100, "c GSV_circle %.3f %.3f", angle_x, angle_y);
+	if (button == 1) {
+		if (angle_y > 0) {
+			snprintf(bf, 100, "c GSV_goto %.3f %.3f", angle_x, angle_y);
+		} else {
+			//snprintf(bf,100,"c moveByRel %.3f %.3f 0 0",x,y);
+			snprintf(bf, 100, "c moveByRel 0 0 0 %.3f", angle_x);
+		}
+
+	} else {
+		if (angle_y > 0) {
+			snprintf(bf, 100, "c GSV_circle %.3f %.3f", angle_x, angle_y);
+		} else {
+			//snprintf(bf,100,"c moveByRel 0 0 %.3f %.3f",y,x*45);
+			snprintf(bf, 100, "c moveByRel 0 0 0 %.3f", angle_x);
+		}
+	}
 	node->publishCommand(bf);
 }
