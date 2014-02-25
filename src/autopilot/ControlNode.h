@@ -81,6 +81,7 @@ private:
 	double parameter_StayWithinDist;
 	double parameter_LineSpeed;	// [ziquan]
 	double parameter_SpinSpeed;	// [ziquan]
+	double parameter_GSVScalar; // [ziquan]
 
 
 	void popNextCommand(const tum_ardrone::filter_stateConstPtr statePtr);

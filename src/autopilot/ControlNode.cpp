@@ -95,6 +95,7 @@ ControlNode::ControlNode() {
 	parameter_StayWithinDist = 0.5;
 	parameter_StayTime = 2;
 	parameter_LineSpeed = 0.1;
+	parameter_GSVScalar = 1.8;
 	isControlling = false;
 	currentKI = NULL;
 	lastSentControl = ControlCommand(0, 0, 0, 0);
@@ -255,9 +256,16 @@ void ControlNode::popNextCommand(
 		// setSpinSpeed [ziquan]
 		else if (sscanf(command.c_str(), "setSpinSpeed %f", &parameters[0])
 				== 1) {
-			parameter_SpinSpeed = parameters[0];
+			parameter_GSVScalar = parameters[0];
 			commandUnderstood = true;
 		}
+
+		// setGSVScaler [ziquan]
+		else if (sscanf(command.c_str(), "setGSVScaler %f", &parameters[0])
+						== 1) {
+					parameter_SpinSpeed = parameters[0];
+					commandUnderstood = true;
+				}
 
 		// goto
 		else if (sscanf(command.c_str(), "goto %f %f %f %f", &parameters[0],
@@ -423,7 +431,7 @@ void ControlNode::popNextCommand(
 			}
 			double distance = altdMM * 0.001
 					* tan(M_PI_2 - parameters[1] * M_PI / 180);	// height * cot(angle_y)
-
+			distance *= parameter_GSVScalar;
 			currentKI = new KIFlyTo(
 					DronePosition(
 							TooN::makeVector(
@@ -455,7 +463,7 @@ void ControlNode::popNextCommand(
 			}
 			double distance = altdMM * 0.001
 					* tan(M_PI_2 - parameters[1] * M_PI / 180);	// height * cot(angle_y)
-
+			distance *= parameter_GSVScalar;
 			currentKI = new KICircle(
 					// current position
 					DronePosition(
