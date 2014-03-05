@@ -262,10 +262,10 @@ void ControlNode::popNextCommand(
 
 		// setGSVScaler [ziquan]
 		else if (sscanf(command.c_str(), "setGSVScaler %f", &parameters[0])
-						== 1) {
-					parameter_SpinSpeed = parameters[0];
-					commandUnderstood = true;
-				}
+				== 1) {
+			parameter_SpinSpeed = parameters[0];
+			commandUnderstood = true;
+		}
 
 		// goto
 		else if (sscanf(command.c_str(), "goto %f %f %f %f", &parameters[0],
@@ -484,11 +484,24 @@ void ControlNode::popNextCommand(
 			if (!commandUnderstood)
 				ROS_INFO("unknown command, skipping!");
 		}
+		// hover [ziquan]
+		else if (command == "hoverlog") {
+			currentKI = new KIFlyTo(
+					DronePosition(
+							TooN::makeVector(statePtr->x, statePtr->y,
+									statePtr->z), statePtr->yaw),
+					parameter_StayTime, parameter_MaxControl,
+					parameter_InitialReachDist, parameter_StayWithinDist, true);
+			currentKI->setPointers(this, &controller);
+			commandUnderstood = true;
+		}
+		if (!commandUnderstood)
+			ROS_INFO("unknown command, skipping!");
 	}
 }
 
 void ControlNode::comCb(const std_msgs::StringConstPtr str) {
-	// only handle commands with prefix c
+// only handle commands with prefix c
 	if (str->data.length() > 2 && str->data.substr(0, 2) == "c ") {
 		std::string cmd = str->data.substr(2, str->data.length() - 2);
 
@@ -518,7 +531,7 @@ void ControlNode::comCb(const std_msgs::StringConstPtr str) {
 		}
 	}
 
-	// global command: toggle log
+// global command: toggle log
 	if (str->data.length() == 9 && str->data.substr(0, 9) == "toggleLog") {
 		this->toogleLogging();
 	}
@@ -587,7 +600,7 @@ void ControlNode::publishCommand(std::string c) {
 }
 
 void ControlNode::toogleLogging() {
-	// logging has yet to be integrated.
+// logging has yet to be integrated.
 }
 
 void ControlNode::sendControlToDrone(ControlCommand cmd) {
@@ -597,9 +610,9 @@ void ControlNode::sendControlToDrone(ControlCommand cmd) {
 	cmdT.linear.x = -cmd.pitch;
 	cmdT.linear.y = -cmd.roll;
 
-	// assume that while actively controlling, the above for will never be equal to zero, so i will never hover.
+// assume that while actively controlling, the above for will never be equal to zero, so i will never hover.
 	cmdT.angular.x = cmdT.angular.y = 0;
-	// cmdT.angular.x = cmdT.angular.x = 0; MODIFIED BY ZIQUAN
+// cmdT.angular.x = cmdT.angular.x = 0; MODIFIED BY ZIQUAN
 
 	if (isControlling) {
 		vel_pub.publish(cmdT);
