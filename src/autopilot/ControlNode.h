@@ -37,7 +37,6 @@ class MapView;
 class PTAMWrapper;
 class KIProcedure;
 
-
 struct ControlNode
 {
 private:
@@ -89,8 +88,7 @@ private:
 	char buf[500];
 	ControlCommand lastSentControl;
 
-
-	// [ziquan]
+	// absolute height for GSV [ziquan]
 	int altdMM;
 public:
 	ControlNode();
@@ -128,5 +126,10 @@ public:
 	// other internals
 	long lastControlSentMS;
 	bool isControlling;
+
+	// trajectory
+	std::string currentKIString;
+	int trajectoryMaxSize;
+	std::deque<DronePosition> trajectory;
 };
 #endif /* __CONTROLNODE_H */

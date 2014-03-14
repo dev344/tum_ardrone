@@ -41,6 +41,7 @@
 #include "KI/KIQLearning.h"	//[ziquan]
 #include "KI/KIModel.h"		//[ziquan]
 #include "KI/KIRepsExe.h"	//[ziquan]
+#include "KI/KIRecover.h"	//[ziquan]
 #include "KI/KIProcedure.h"
 
 using namespace std;
@@ -103,6 +104,9 @@ ControlNode::ControlNode() {
 	// create controller
 	controller = DroneController();
 	controller.node = this;
+
+	// trajectory
+	trajectoryMaxSize = 300;
 }
 
 ControlNode::~ControlNode() {
@@ -115,22 +119,125 @@ void ControlNode::droneposeCb(
 	// do controlling
 	pthread_mutex_lock(&commandQueue_CS);
 
+	// good position, update trajectory
+	if (statePtr->ptamState == statePtr->PTAM_GOOD
+			|| statePtr->ptamState == statePtr->PTAM_BEST
+			|| statePtr->ptamState == statePtr->PTAM_TOOKKF) {
+		while (trajectory.size() >= trajectoryMaxSize) {
+			trajectory.pop_back();
+		}
+		trajectory.push_front(
+				DronePosition(
+						TooN::makeVector(statePtr->x, statePtr->y, statePtr->z),
+						statePtr->yaw));
+	}
+
 	// as long as no KI present:
 	// pop next KI (if next KI present).
-	while (currentKI == NULL && commandQueue.size() > 0)
-		popNextCommand(statePtr);
-
-	// if there is no current KI now, we obviously have no current goal -> send drone hover
-	if (currentKI != NULL) {
-		// let current KI control.
-		if (currentKI->update(statePtr) && commandQueue.size() > 0) {
-			delete currentKI;
-			currentKI = NULL;
+	while (currentKI == NULL && !commandQueue.empty()) {
+		// lost -> INTERRUPT!
+		if (statePtr->ptamState == statePtr->PTAM_LOST) {
+			currentKIString = "Recovering";
+			// Recovering
+			if (!trajectory.empty()) {
+				delete currentKI;
+				currentKI = new KIRecover(trajectory.front(), 2.0);
+				currentKI->setPointers(this, &controller);
+			} else {
+				sendControlToDrone(hoverCommand);
+				ROS_WARN(
+						"lost track, and there is no previous tracked position to try -> sending HOVER");
+			}
+		} else {
+			popNextCommand(statePtr);
 		}
-	} else if (isControlling) {
-		sendControlToDrone(hoverCommand);
-		ROS_WARN(
-				"Autopilot is Controlling, but there is no KI -> sending HOVER");
+	}
+
+	if (currentKI != NULL) {
+		// lost -> INTERRUPT!
+		if (statePtr->ptamState == statePtr->PTAM_LOST
+				&& currentKIString != "Recovering") {
+			commandQueue.push_front(currentKIString);
+			currentKIString = "Recovering";
+			// Recovering
+			if (!trajectory.empty()) {
+				delete currentKI;
+				currentKI = new KIRecover(trajectory.front(), 2.0);
+				currentKI->setPointers(this, &controller);
+				ROS_WARN("lost track -> start RECOVERING");
+			} else {
+				sendControlToDrone(hoverCommand);
+				ROS_WARN(
+						"lost track, and there is no previous tracked position to try -> sending HOVER");
+			}
+		}
+		// let current KI control.
+		else if (currentKI->update(statePtr)) {
+			// RECOVERING
+			if (currentKIString == "Recovering") {
+				switch (statePtr->ptamState) {
+				case statePtr->PTAM_LOST:	// recovering over time
+					trajectory.pop_front();
+					if (!trajectory.empty()) {
+						delete currentKI;
+						currentKI = new KIRecover(trajectory.front(), 2.0);
+						currentKI->setPointers(this, &controller);
+						ROS_WARN(
+								"lost track, recover failed -> start RECOVERING again");
+					} else {
+						sendControlToDrone(hoverCommand);
+						ROS_WARN(
+								"lost track, and there is no previous tracked position to try -> sending HOVER");
+					}
+					break;
+				case statePtr->PTAM_GOOD:	// recovered
+				case statePtr->PTAM_BEST:	// recovered
+					publishCommand("p keyframe");	// take KF
+					delete currentKI;
+					currentKI = NULL;
+					currentKIString = NULL;
+					ROS_WARN("recovered -> FORCE KF");
+					break;
+				case statePtr->PTAM_TOOKKF:	// just took KF
+					delete currentKI;
+					currentKI = NULL;
+					currentKIString = NULL;
+					ROS_WARN("recovered -> NO FORCE KF");
+					break;
+				}
+			}
+			// there is no other KIs in the queue, but the last KI is done.
+			else {
+				// it it not optimal to send hover, but it is reasonable and easy
+				sendControlToDrone(hoverCommand);
+				ROS_WARN(
+						"Autopilot is Controlling, but there is no more KI -> sending HOVER");
+			}
+		} else {
+			// not lost or recovering
+		}
+	}
+	// if there is no current KI now, we obviously have no current goal -> send drone hover
+	// it it not optimal to send hover, but it is reasonable and easy
+	else if (isControlling) {
+		// lost -> RECOVER
+		if (statePtr->ptamState == statePtr->PTAM_LOST) {
+			currentKIString = "Recovering";
+			// Recovering
+			if (!trajectory.empty()) {
+				delete currentKI;
+				currentKI = new KIRecover(trajectory.front(), 2.0);
+				currentKI->setPointers(this, &controller);
+			} else {
+				sendControlToDrone(hoverCommand);
+				ROS_WARN(
+						"lost track, and there is no previous tracked position to try -> sending HOVER");
+			}
+		} else {
+			sendControlToDrone(hoverCommand);
+			ROS_WARN(
+					"Autopilot is Controlling, but KI is NULL -> sending HOVER");
+		}
 	}
 
 	pthread_mutex_unlock(&commandQueue_CS);
@@ -145,7 +252,7 @@ void ControlNode::navdataCb(
 // assumes propery of command queue lock exists (!)
 void ControlNode::popNextCommand(
 		const tum_ardrone::filter_stateConstPtr statePtr) {
-	// should actually not happen., but to make shure:
+	// should actually not happen., but to make sure:
 	// delete existing KI.
 	if (currentKI != NULL) {
 		delete currentKI;
@@ -158,16 +265,16 @@ void ControlNode::popNextCommand(
 		commandQueue.pop_front();
 		bool commandUnderstood = false;
 
-		// print me
+// print me
 		ROS_INFO("executing command: %s", command.c_str());
 
 		int p;
 		char buf[100];
 		float parameters[10];
 
-		//int pi;
+//int pi;
 
-		// replace macros
+// replace macros
 		if ((p = command.find("$POSE$")) != std::string::npos) {
 			snprintf(buf, 100, "%.3f %.3f %.3f %.3f", statePtr->x, statePtr->y,
 					statePtr->z, statePtr->yaw);
@@ -182,14 +289,15 @@ void ControlNode::popNextCommand(
 			command.replace(p, 11, buf);
 		}
 
-		// -------- commands -----------
-		// autoInit
+// -------- commands -----------
+// autoInit
 		if (sscanf(command.c_str(), "autoInit %f %f %f %f", &parameters[0],
 				&parameters[1], &parameters[2], &parameters[3]) == 4) {
 			currentKI = new KIAutoInit(true, parameters[0], parameters[1],
 					parameters[2], parameters[3], true);
 			currentKI->setPointers(this, &controller);
 			commandUnderstood = true;
+			currentKIString = command;
 		}
 
 		else if (sscanf(command.c_str(), "autoTakeover %f %f %f %f",
@@ -199,16 +307,18 @@ void ControlNode::popNextCommand(
 					parameters[2], parameters[3], false);
 			currentKI->setPointers(this, &controller);
 			commandUnderstood = true;
+			currentKIString = command;
 		}
 
-		// takeoff
+// takeoff
 		else if (command == "takeoff") {
 			currentKI = new KIAutoInit(false);
 			currentKI->setPointers(this, &controller);
 			commandUnderstood = true;
+			currentKIString = command;
 		}
 
-		// setOffset
+// setOffset
 		else if (sscanf(command.c_str(), "setReference %f %f %f %f",
 				&parameters[0], &parameters[1], &parameters[2], &parameters[3])
 				== 4) {
@@ -218,56 +328,56 @@ void ControlNode::popNextCommand(
 			commandUnderstood = true;
 		}
 
-		// setMaxControl
+// setMaxControl
 		else if (sscanf(command.c_str(), "setMaxControl %f", &parameters[0])
 				== 1) {
 			parameter_MaxControl = parameters[0];
 			commandUnderstood = true;
 		}
 
-		// setInitialReachDist
+// setInitialReachDist
 		else if (sscanf(command.c_str(), "setInitialReachDist %f",
 				&parameters[0]) == 1) {
 			parameter_InitialReachDist = parameters[0];
 			commandUnderstood = true;
 		}
 
-		// setStayWithinDist
+// setStayWithinDist
 		else if (sscanf(command.c_str(), "setStayWithinDist %f", &parameters[0])
 				== 1) {
 			parameter_StayWithinDist = parameters[0];
 			commandUnderstood = true;
 		}
 
-		// setStayTime
+// setStayTime
 		else if (sscanf(command.c_str(), "setStayTime %f", &parameters[0])
 				== 1) {
 			parameter_StayTime = parameters[0];
 			commandUnderstood = true;
 		}
 
-		// setLineSpeed [ziquan]
+// setLineSpeed [ziquan]
 		else if (sscanf(command.c_str(), "setLineSpeed %f", &parameters[0])
 				== 1) {
 			parameter_LineSpeed = parameters[0];
 			commandUnderstood = true;
 		}
 
-		// setSpinSpeed [ziquan]
+// setSpinSpeed [ziquan]
 		else if (sscanf(command.c_str(), "setSpinSpeed %f", &parameters[0])
 				== 1) {
 			parameter_GSVScalar = parameters[0];
 			commandUnderstood = true;
 		}
 
-		// setGSVScaler [ziquan]
+// setGSVScaler [ziquan]
 		else if (sscanf(command.c_str(), "setGSVScaler %f", &parameters[0])
 				== 1) {
 			parameter_SpinSpeed = parameters[0];
 			commandUnderstood = true;
 		}
 
-		// goto
+// goto
 		else if (sscanf(command.c_str(), "goto %f %f %f %f", &parameters[0],
 				&parameters[1], &parameters[2], &parameters[3]) == 4) {
 			currentKI = new KIFlyTo(
@@ -280,10 +390,10 @@ void ControlNode::popNextCommand(
 					parameter_InitialReachDist, parameter_StayWithinDist);
 			currentKI->setPointers(this, &controller);
 			commandUnderstood = true;
-
+			currentKIString = command;
 		}
 
-		// moveBy
+// moveBy
 		else if (sscanf(command.c_str(), "moveBy %f %f %f %f", &parameters[0],
 				&parameters[1], &parameters[2], &parameters[3]) == 4) {
 			currentKI = new KIFlyTo(
@@ -296,10 +406,10 @@ void ControlNode::popNextCommand(
 					parameter_InitialReachDist, parameter_StayWithinDist);
 			currentKI->setPointers(this, &controller);
 			commandUnderstood = true;
-
+			currentKIString = command;
 		}
 
-		// moveByRel
+// moveByRel
 		else if (sscanf(command.c_str(), "moveByRel %f %f %f %f",
 				&parameters[0], &parameters[1], &parameters[2], &parameters[3])
 				== 4) {
@@ -313,23 +423,24 @@ void ControlNode::popNextCommand(
 					parameter_StayWithinDist);
 			currentKI->setPointers(this, &controller);
 			commandUnderstood = true;
-
+			currentKIString = command;
 		}
 
-		// land
+// land
 		else if (command == "land") {
 			currentKI = new KILand();
 			currentKI->setPointers(this, &controller);
 			commandUnderstood = true;
+			currentKIString = command;
 		}
 
-		// setScaleFP
+// setScaleFP
 		else if (command == "lockScaleFP") {
 			publishCommand("p lockScaleFP");
 			commandUnderstood = true;
 		}
 
-		// goAlong [ziquan]
+// goAlong [ziquan]
 		else if (sscanf(command.c_str(), "goAlong %f %f %f %f", &parameters[0],
 				&parameters[1], &parameters[2], &parameters[3]) == 4) {
 			currentKI = new KIFlyAlong(
@@ -346,9 +457,10 @@ void ControlNode::popNextCommand(
 					parameters[3]);
 			currentKI->setPointers(this, &controller);
 			commandUnderstood = true;
+			currentKIString = command;
 		}
 
-		// spin [ziquan]
+// spin [ziquan]
 		else if (sscanf(command.c_str(), "spin %f", &parameters[0]) == 1) {
 			currentKI = new KISpin(
 			// current position
@@ -361,9 +473,10 @@ void ControlNode::popNextCommand(
 					parameters[0]);
 			currentKI->setPointers(this, &controller);
 			commandUnderstood = true;
+			currentKIString = command;
 		}
 
-		// circleL [ziquan]
+// circleL [ziquan]
 		else if (sscanf(command.c_str(), "circleL %f %f %f", &parameters[0],
 				&parameters[1], &parameters[2]) == 3) {
 			currentKI = new KICircle(
@@ -379,9 +492,10 @@ void ControlNode::popNextCommand(
 					parameter_StayTime);
 			currentKI->setPointers(this, &controller);
 			commandUnderstood = true;
+			currentKIString = command;
 		}
 
-		// circleR [ziquan]
+// circleR [ziquan]
 		else if (sscanf(command.c_str(), "circleR %f %f %f", &parameters[0],
 				&parameters[1], &parameters[2]) == 3) {
 			currentKI = new KICircle(
@@ -397,29 +511,30 @@ void ControlNode::popNextCommand(
 					parameter_StayTime);
 			currentKI->setPointers(this, &controller);
 			commandUnderstood = true;
+			currentKIString = command;
 		}
-		// Qlearning [ziquan]
+// Qlearning [ziquan]
 		else if (sscanf(command.c_str(), "qlearn %f %f", &parameters[0],
 				&parameters[1]) == 2) {
 			currentKI = new KIQLearning(parameters[0], parameters[1]);
 			currentKI->setPointers(this, &controller);
 			commandUnderstood = true;
 		}
-		// Model-based learning [ziquan]
+// Model-based learning [ziquan]
 		else if (sscanf(command.c_str(), "mlearn %f %f", &parameters[0],
 				&parameters[1]) == 2) {
 			currentKI = new KIModel((int) (parameters[0]), parameters[1]);
 			currentKI->setPointers(this, &controller);
 			commandUnderstood = true;
 		}
-		// Reps [ziquan]
+// Reps [ziquan]
 		else if (sscanf(command.c_str(), "reps %f %f", &parameters[0],
 				&parameters[1]) == 2) {
 			currentKI = new KIRepsExe(parameters[0], parameters[1]);
 			currentKI->setPointers(this, &controller);
 			commandUnderstood = true;
 		}
-		// GSV_goto [ziquan]
+// GSV_goto [ziquan]
 		else if (sscanf(command.c_str(), "GSV_goto %f %f", &parameters[0],
 				&parameters[1]) == 2) {
 			double direction = statePtr->yaw + parameters[0];	// yaw + angle_x
@@ -450,8 +565,9 @@ void ControlNode::popNextCommand(
 					parameter_InitialReachDist, parameter_StayWithinDist);
 			currentKI->setPointers(this, &controller);
 			commandUnderstood = true;
+			currentKIString = command;
 		}
-		// GSV_circle [ziquan]
+// GSV_circle [ziquan]
 		else if (sscanf(command.c_str(), "GSV_circle %f %f", &parameters[0],
 				&parameters[1]) == 2) {
 			double direction = statePtr->yaw + parameters[0];	// yaw + angle_x
@@ -481,10 +597,9 @@ void ControlNode::popNextCommand(
 					parameter_StayTime);
 			currentKI->setPointers(this, &controller);
 			commandUnderstood = true;
-			if (!commandUnderstood)
-				ROS_INFO("unknown command, skipping!");
+			currentKIString = command;
 		}
-		// hover [ziquan]
+// hover [ziquan]
 		else if (command == "hoverlog") {
 			currentKI = new KIFlyTo(
 					DronePosition(
@@ -494,6 +609,7 @@ void ControlNode::popNextCommand(
 					parameter_InitialReachDist, parameter_StayWithinDist, true);
 			currentKI->setPointers(this, &controller);
 			commandUnderstood = true;
+			currentKIString = command;
 		}
 		if (!commandUnderstood)
 			ROS_INFO("unknown command, skipping!");
@@ -543,7 +659,7 @@ void ControlNode::Loop() {
 
 	while (nh_.ok()) {
 
-		// -------------- 1. spin for 50ms, do main controlling part here. ---------------
+// -------------- 1. spin for 50ms, do main controlling part here. ---------------
 		while ((ros::Time::now() - last)
 				< ros::Duration(minPublishFreq / 1000.0))
 			ros::getGlobalCallbackQueue()->callAvailable(
@@ -552,7 +668,7 @@ void ControlNode::Loop() {
 									- (ros::Time::now() - last).toSec()));
 		last = ros::Time::now();
 
-		// -------------- 2. send hover (maybe). ---------------
+// -------------- 2. send hover (maybe). ---------------
 		if (isControlling
 				&& getMS(ros::Time::now()) - lastControlSentMS
 						> minPublishFreq) {
@@ -561,7 +677,7 @@ void ControlNode::Loop() {
 					"Autopilot enabled, but no estimated pose received - sending HOVER.");
 		}
 
-		// -------------- 3. update info. ---------------
+// -------------- 3. update info. ---------------
 		if ((ros::Time::now() - lastStateUpdate) > ros::Duration(0.4)) {
 			reSendInfo();
 			lastStateUpdate = ros::Time::now();
