@@ -175,8 +175,7 @@ void ControlNode::droneposeCb(
 		else if (currentKI->update(statePtr)) {
 			// RECOVERING
 			if (currentKIString == "Recovering") {
-				switch (statePtr->ptamState) {
-				case statePtr->PTAM_LOST:	// recovering over time
+				if (statePtr->ptamState == statePtr->PTAM_LOST) {
 					trajectory.pop_front();
 					if (!trajectory.empty()) {
 						delete currentKI;
@@ -189,21 +188,18 @@ void ControlNode::droneposeCb(
 						ROS_WARN(
 								"lost track, and there is no previous tracked position to try -> sending HOVER");
 					}
-					break;
-				case statePtr->PTAM_GOOD:	// recovered
-				case statePtr->PTAM_BEST:	// recovered
+				} else if (statePtr->ptamState == statePtr->PTAM_GOOD
+						|| statePtr->ptamState == statePtr->PTAM_BEST) {
 					publishCommand("p keyframe");	// take KF
 					delete currentKI;
 					currentKI = NULL;
-					currentKIString = NULL;
+					currentKIString.clear();
 					ROS_WARN("recovered -> FORCE KF");
-					break;
-				case statePtr->PTAM_TOOKKF:	// just took KF
+				} else if (statePtr->ptamState == statePtr->PTAM_TOOKKF) {
 					delete currentKI;
 					currentKI = NULL;
-					currentKIString = NULL;
+					currentKIString.clear();
 					ROS_WARN("recovered -> NO FORCE KF");
-					break;
 				}
 			}
 			// there is no other KIs in the queue, but the last KI is done.
