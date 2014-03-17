@@ -41,7 +41,7 @@
 #include "KI/KIQLearning.h"	//[ziquan]
 #include "KI/KIModel.h"		//[ziquan]
 #include "KI/KIRepsExe.h"	//[ziquan]
-#include "KI/KIRecover.h"	//[ziquan]
+//#include "KI/KIRecover.h"	//[ziquan]
 #include "KI/KIProcedure.h"
 
 using namespace std;
@@ -141,7 +141,7 @@ void ControlNode::droneposeCb(
 			// Recovering
 			if (!trajectory.empty()) {
 				delete currentKI;
-				currentKI = new KIRecover(trajectory.front(), 2.0);
+				currentKI = new KIFlyTo(trajectory.front(), 0.1);
 				currentKI->setPointers(this, &controller);
 			} else {
 				sendControlToDrone(hoverCommand);
@@ -162,7 +162,7 @@ void ControlNode::droneposeCb(
 			// Recovering
 			if (!trajectory.empty()) {
 				delete currentKI;
-				currentKI = new KIRecover(trajectory.front(), 2.0);
+				currentKI = new KIFlyTo(trajectory.front(), 0.1);
 				currentKI->setPointers(this, &controller);
 				ROS_WARN("lost track -> start RECOVERING");
 			} else {
@@ -179,7 +179,7 @@ void ControlNode::droneposeCb(
 					trajectory.pop_front();
 					if (!trajectory.empty()) {
 						delete currentKI;
-						currentKI = new KIRecover(trajectory.front(), 2.0);
+						currentKI = new KIFlyTo(trajectory.front(), 0.1);
 						currentKI->setPointers(this, &controller);
 						ROS_WARN(
 								"lost track, recover failed -> start RECOVERING again");
@@ -222,7 +222,7 @@ void ControlNode::droneposeCb(
 			// Recovering
 			if (!trajectory.empty()) {
 				delete currentKI;
-				currentKI = new KIRecover(trajectory.front(), 2.0);
+				currentKI = new KIFlyTo(trajectory.front(), 0.1);
 				currentKI->setPointers(this, &controller);
 			} else {
 				sendControlToDrone(hoverCommand);
