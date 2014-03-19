@@ -293,7 +293,6 @@ void ControlNode::popNextCommand(
 					parameters[2], parameters[3], true);
 			currentKI->setPointers(this, &controller);
 			commandUnderstood = true;
-			currentKIString = command;
 		}
 
 		else if (sscanf(command.c_str(), "autoTakeover %f %f %f %f",
@@ -303,7 +302,6 @@ void ControlNode::popNextCommand(
 					parameters[2], parameters[3], false);
 			currentKI->setPointers(this, &controller);
 			commandUnderstood = true;
-			currentKIString = command;
 		}
 
 // takeoff
@@ -311,7 +309,6 @@ void ControlNode::popNextCommand(
 			currentKI = new KIAutoInit(false);
 			currentKI->setPointers(this, &controller);
 			commandUnderstood = true;
-			currentKIString = command;
 		}
 
 // setOffset
@@ -471,43 +468,69 @@ void ControlNode::popNextCommand(
 			commandUnderstood = true;
 			currentKIString = command;
 		}
-
-// circleL [ziquan]
-		else if (sscanf(command.c_str(), "circleL %f %f %f", &parameters[0],
-				&parameters[1], &parameters[2]) == 3) {
-			currentKI = new KICircle(
-					// current position
-					DronePosition(
-							TooN::makeVector(statePtr->x, statePtr->y,
-									statePtr->z), statePtr->yaw),
-					// center
-					TooN::makeVector(parameters[0], parameters[1],
-							parameters[2]) + parameter_referenceZero.pos,
-					// upVector
-					TooN::makeVector(0.0, 0.0, 1.0), parameter_LineSpeed,
-					parameter_StayTime);
+		// circleL4 [ziquan]
+		else if (sscanf(command.c_str(), "circleL %f %f %f %f", &parameters[0],
+				&parameters[1], &parameters[2], &parameters[3]) == 4) {
+			TooN::Vector<3> centerPoint = TooN::makeVector(parameters[0],
+					parameters[1], parameters[2]);
+			TooN::Vector<3> upVector = TooN::makeVector(0.0, 0.0, 1.0);
+			double radius = parameters[3];
+			currentKI = new KICircle(centerPoint, upVector, radius,
+					parameter_LineSpeed, parameter_StayTime);
 			currentKI->setPointers(this, &controller);
 			commandUnderstood = true;
 			currentKIString = command;
 		}
-
-// circleR [ziquan]
-		else if (sscanf(command.c_str(), "circleR %f %f %f", &parameters[0],
+		// circleL3 [ziquan]
+		else if (sscanf(command.c_str(), "circleL %f %f %f", &parameters[0],
 				&parameters[1], &parameters[2]) == 3) {
-			currentKI = new KICircle(
-					// current position
-					DronePosition(
-							TooN::makeVector(statePtr->x, statePtr->y,
-									statePtr->z), statePtr->yaw),
-					// center
-					TooN::makeVector(parameters[0], parameters[1],
-							parameters[2]) + parameter_referenceZero.pos,
-					// upVector
-					TooN::makeVector(0.0, 0.0, -1.0), parameter_LineSpeed,
-					parameter_StayTime);
+			TooN::Vector<3> centerPoint = TooN::makeVector(parameters[0],
+					parameters[1], parameters[2]) + parameter_referenceZero.pos;
+			TooN::Vector<3> currentPoint = TooN::makeVector(statePtr->x,
+					statePtr->y, statePtr->z);
+			TooN::Vector<3> upVector = TooN::makeVector(0.0, 0.0, 1.0);
+			double radius = sqrt(
+					(centerPoint - currentPoint)
+							* (centerPoint - currentPoint));
+			currentKI = new KICircle(centerPoint, upVector, radius,
+					parameter_LineSpeed, parameter_StayTime);
+			currentKI->setPointers(this, &controller);
+			commandUnderstood = true;
+			snprintf(buf, 100, "circleL %.3f %.3f %.3f %.3f", centerPoint[0],
+					centerPoint[1], centerPoint[2], radius);
+			currentKIString = std::string(buf);
+		}
+		// circleR4 [ziquan]
+		else if (sscanf(command.c_str(), "circleR %f %f %f %f", &parameters[0],
+				&parameters[1], &parameters[2], &parameters[3]) == 4) {
+			TooN::Vector<3> centerPoint = TooN::makeVector(parameters[0],
+					parameters[1], parameters[2]);
+			TooN::Vector<3> upVector = TooN::makeVector(0.0, 0.0, -1.0);
+			double radius = parameters[3];
+			currentKI = new KICircle(centerPoint, upVector, radius,
+					parameter_LineSpeed, parameter_StayTime);
 			currentKI->setPointers(this, &controller);
 			commandUnderstood = true;
 			currentKIString = command;
+		}
+		// circleR3 [ziquan]
+		else if (sscanf(command.c_str(), "circleR %f %f %f", &parameters[0],
+				&parameters[1], &parameters[2]) == 3) {
+			TooN::Vector<3> centerPoint = TooN::makeVector(parameters[0],
+					parameters[1], parameters[2]) + parameter_referenceZero.pos;
+			TooN::Vector<3> currentPoint = TooN::makeVector(statePtr->x,
+					statePtr->y, statePtr->z);
+			TooN::Vector<3> upVector = TooN::makeVector(0.0, 0.0, -1.0);
+			double radius = sqrt(
+					(centerPoint - currentPoint)
+							* (centerPoint - currentPoint));
+			currentKI = new KICircle(centerPoint, upVector, radius,
+					parameter_LineSpeed, parameter_StayTime);
+			currentKI->setPointers(this, &controller);
+			commandUnderstood = true;
+			snprintf(buf, 100, "circleR %.3f %.3f %.3f %.3f", centerPoint[0],
+					centerPoint[1], centerPoint[2], radius);
+			currentKIString = std::string(buf);
 		}
 // Qlearning [ziquan]
 		else if (sscanf(command.c_str(), "qlearn %f %f", &parameters[0],
@@ -563,38 +586,38 @@ void ControlNode::popNextCommand(
 			commandUnderstood = true;
 			currentKIString = command;
 		}
-// GSV_circle [ziquan]
-		else if (sscanf(command.c_str(), "GSV_circle %f %f", &parameters[0],
-				&parameters[1]) == 2) {
-			double direction = statePtr->yaw + parameters[0];	// yaw + angle_x
-			while (direction < -180) {
-				direction += 360;
-			}
-			while (direction >= 180) {
-				direction -= 360;
-			}
-			double distance = altdMM * 0.001
-					* tan(M_PI_2 - parameters[1] * M_PI / 180);	// height * cot(angle_y)
-			distance *= parameter_GSVScalar;
-			currentKI = new KICircle(
-					// current position
-					DronePosition(
-							TooN::makeVector(statePtr->x, statePtr->y,
-									statePtr->z), statePtr->yaw),
-					// center
-					TooN::makeVector(
-							statePtr->x
-									+ distance * sin(direction * M_PI / 180),
-							statePtr->y
-									+ distance * cos(direction * M_PI / 180),
-							statePtr->z),
-					// upVector
-					TooN::makeVector(0.0, 0.0, -1.0), parameter_LineSpeed,
-					parameter_StayTime);
-			currentKI->setPointers(this, &controller);
-			commandUnderstood = true;
-			currentKIString = command;
-		}
+//// GSV_circle [ziquan]
+//		else if (sscanf(command.c_str(), "GSV_circle %f %f", &parameters[0],
+//				&parameters[1]) == 2) {
+//			double direction = statePtr->yaw + parameters[0];	// yaw + angle_x
+//			while (direction < -180) {
+//				direction += 360;
+//			}
+//			while (direction >= 180) {
+//				direction -= 360;
+//			}
+//			double distance = altdMM * 0.001
+//					* tan(M_PI_2 - parameters[1] * M_PI / 180);	// height * cot(angle_y)
+//			distance *= parameter_GSVScalar;
+//			currentKI = new KICircle(
+//					// current position
+//					DronePosition(
+//							TooN::makeVector(statePtr->x, statePtr->y,
+//									statePtr->z), statePtr->yaw),
+//					// center
+//					TooN::makeVector(
+//							statePtr->x
+//									+ distance * sin(direction * M_PI / 180),
+//							statePtr->y
+//									+ distance * cos(direction * M_PI / 180),
+//							statePtr->z),
+//					// upVector
+//					TooN::makeVector(0.0, 0.0, -1.0), parameter_LineSpeed,
+//					parameter_StayTime);
+//			currentKI->setPointers(this, &controller);
+//			commandUnderstood = true;
+//			currentKIString = command;
+//		}
 // hover [ziquan]
 		else if (command == "hoverlog") {
 			currentKI = new KIFlyTo(
