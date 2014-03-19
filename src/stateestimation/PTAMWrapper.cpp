@@ -495,7 +495,7 @@ void PTAMWrapper::HandleFrame() {
 	}
 
 	// ----------------------------- Take KF? -----------------------------------
-	if (!mapLocked && isVeryGood
+	if (!mapLocked && isGood	//isVeryGood [ziquan]
 			&& (forceKF || mpMap->vpKeyFrames.size() < maxKF || maxKF <= 1)) {
 		mpTracker->TakeKF(forceKF);
 		forceKF = false;
