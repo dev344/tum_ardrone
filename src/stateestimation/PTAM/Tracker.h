@@ -67,8 +67,8 @@ public:
 
   // the value of this at I_FIRST will be approx. the first keyframe's position.
   // the value of this at I_SECOND will be approx. the second keyframe's position (or at least the translation will be scaled respectively).
-  inline void setPredictedCamFromW(SE3<>& camFromW) {predictedCFromW = camFromW;}
-  inline void setLastFrameLost(bool lost, bool useGuessForRecovery = false) {lastFrameLost = lost; useGuess = useGuessForRecovery;};
+  inline void setPredictedCamFromW(SE3<>& camFromW) {mse3CamFromWorld = camFromW;} // [ziquan] predictedCFromW = camFromW;}
+  // [ziquan] inline void setLastFrameLost(bool lost, bool useGuessForRecovery = false) {lastFrameLost = lost; useGuess = useGuessForRecovery;};
 
 protected:
   KeyFrame mCurrentKF;            // The current working frame as a keyframe struct
@@ -99,8 +99,8 @@ protected:
   // Methods for tracking the map once it has been made:
   void TrackMap();                // Called by TrackFrame if there is a map.
   void AssessTrackingQuality();   // Heuristics to choose between good, poor, bad.
-  void ApplyMotionModel();        // Decaying velocity motion model applied prior to TrackMap
-  void UpdateMotionModel();       // Motion model is updated after TrackMap
+  // [ziquan] void ApplyMotionModel();        // Decaying velocity motion model applied prior to TrackMap
+  // [ziquan] void UpdateMotionModel();       // Motion model is updated after TrackMap
   int SearchForPoints(std::vector<TrackerData*> &vTD, 
 		      int nRange, 
 		      int nFineIts);  // Finds points in the image
@@ -108,10 +108,10 @@ protected:
 			   double dOverrideSigma = 0.0, 
 			   bool bMarkOutliers = false); // Updates pose from found points.
   SE3<> mse3CamFromWorld;           // Camera pose: this is what the tracker updates every frame.
-  SE3<> mse3StartPos;               // What the camera pose was at the start of the frame.
-  Vector<6> mv6CameraVelocity;    // Motion model
-  double mdVelocityMagnitude;     // Used to decide on coarse tracking 
-  double mdMSDScaledVelocityMagnitude; // Velocity magnitude scaled by relative scene depth.
+  // [ziquan] SE3<> mse3StartPos;               // What the camera pose was at the start of the frame.
+  // [ziquan] Vector<6> mv6CameraVelocity;    // Motion model
+  // [ziquan] double mdVelocityMagnitude;     // Used to decide on coarse tracking
+  // [ziquan] double mdMSDScaledVelocityMagnitude; // Velocity magnitude scaled by relative scene depth.
   bool mbDidCoarse;               // Did tracking use the coarse tracking stage?
   
   bool mbDraw;                    // Should the tracker draw anything to OpenGL?
@@ -132,10 +132,11 @@ protected:
   int mnLostFrames;
 
   // Relocalisation functions:
+  /* [ziquan] do not need recovery function, because they are useless anyway
   bool AttemptRecovery();         // Called by TrackFrame if tracking is lost.
   bool mbJustRecoveredSoUseCoarse;// Always use coarse tracking after recovery!
   bool lastFrameLost;
-  bool useGuess;
+  bool useGuess; */
 
   // Frame-to-frame motion init:
   SmallBlurryImage *mpSBILastFrame;

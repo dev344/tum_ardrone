@@ -280,10 +280,11 @@ void PTAMWrapper::HandleFrame() {
 			* predConvert->globaltoDrone;
 
 	// set
-	mpTracker->setPredictedCamFromW(PTAMPoseGuessSE3);
+	mpTracker->setPredictedCamFromW(PTAMPoseGuessSE3);// [ziquan] this was doing nothing. See declaration. bug is FIXED
+
 	//mpTracker->setLastFrameLost((isGoodCount < -10), (videoFrameID%2 != 0));
-	mpTracker->setLastFrameLost((isGoodCount < -20),
-			(mimFrameSEQ_workingCopy % 3 == 0));
+	// [ziquan] the two arguments are useless, but they might be useful in recovery
+	// [ziquan] mpTracker->setLastFrameLost((isGoodCount < -20), (mimFrameSEQ_workingCopy % 3 == 0));
 
 	// track
 	ros::Time startedPTAM = ros::Time::now();
