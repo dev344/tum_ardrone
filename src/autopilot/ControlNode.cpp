@@ -176,8 +176,8 @@ void ControlNode::droneposeCb(
 			// RECOVERING
 			if (currentKIString == "Recovering") {
 				if (statePtr->ptamState == statePtr->PTAM_LOST) {
-					trajectory.pop_front();
 					if (!trajectory.empty()) {
+						trajectory.pop_front();
 						delete currentKI;
 						currentKI = new KIRecover(trajectory.front(), 0.01);
 						currentKI->setPointers(this, &controller);
