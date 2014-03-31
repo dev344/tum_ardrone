@@ -43,6 +43,7 @@ bool HomographyInit::Compute(vector<HomographyMatch> vMatches, double dMaxPixelE
   for(unsigned int i=0; i<mvMatches.size(); i++)
     if(IsHomographyInlier(mm3BestHomography, mvMatches[i]))
       mvHomographyInliers.push_back(mvMatches[i]);
+  cerr << "Inlier homo guys :" << mvHomographyInliers.size() << endl;
   for(int iteration = 0; iteration < 5; iteration++)
     RefineHomographyWithInliers();
   

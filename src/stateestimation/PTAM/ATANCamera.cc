@@ -133,8 +133,9 @@ Vector<2> ATANCamera::UnProject(const Vector<2>& v2Im)
 
   mdLastR = invrtrans(mdLastDistR);
   double dFactor;
-  if(mdLastDistR > 0.01)
+  if(mdLastDistR > 0.01){
     dFactor =  mdLastR / mdLastDistR;
+  }
   else
     dFactor = 1.0;
   mdLastFactor = 1.0 / dFactor;

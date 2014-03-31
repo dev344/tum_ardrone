@@ -39,6 +39,9 @@
 #include <fstream>
 #include <string>
 
+int gFrameCount = 1; // [Devesh] added this.
+int gToggle = 1; // [Devesh] added this.
+
 pthread_mutex_t PTAMWrapper::navInfoQueueCS = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t PTAMWrapper::shallowMapCS = PTHREAD_MUTEX_INITIALIZER;
 
@@ -254,331 +257,360 @@ void PTAMWrapper::run()
 // - add a PTAM observation to filter.
 void PTAMWrapper::HandleFrame()
 {
-	//printf("tracking Frame at ms=%d (from %d)\n",getMS(ros::Time::now()),mimFrameTime-filter->delayVideo);
+    //printf("tracking Frame at ms=%d (from %d)\n",getMS(ros::Time::now()),mimFrameTime-filter->delayVideo);
 
 
-	// prep data
-	msg = "";
-	ros::Time startedFunc = ros::Time::now();
+    // prep data
+    msg = "";
+    ros::Time startedFunc = ros::Time::now();
 
-	// reset?
-	if(resetPTAMRequested)
-		ResetInternal();
+    // reset?
+    if(resetPTAMRequested)
+        ResetInternal();
 
 
-	// make filter thread-safe.
-	// --------------------------- ROLL FORWARD TIL FRAME. This is ONLY done here. ---------------------------
-	pthread_mutex_lock( &filter->filter_CS );
-	//filter->predictUpTo(mimFrameTime,true, true);
-	TooN::Vector<10> filterPosePrePTAM = filter->getPoseAtAsVec(mimFrameTime_workingCopy-filter->delayVideo,true);
-	pthread_mutex_unlock( &filter->filter_CS );
+    // make filter thread-safe.
+    // --------------------------- ROLL FORWARD TIL FRAME. This is ONLY done here. ---------------------------
+    pthread_mutex_lock( &filter->filter_CS );
+    //filter->predictUpTo(mimFrameTime,true, true);
+    TooN::Vector<10> filterPosePrePTAM = filter->getPoseAtAsVec(mimFrameTime_workingCopy-filter->delayVideo,true);
+    pthread_mutex_unlock( &filter->filter_CS );
 
-	// ------------------------ do PTAM -------------------------
-	myGLWindow->SetupViewport();
-	myGLWindow->SetupVideoOrtho();
-	myGLWindow->SetupVideoRasterPosAndZoom();
-
-
-
-	// 1. transform with filter
-	TooN::Vector<6> PTAMPoseGuess = filter->backTransformPTAMObservation(filterPosePrePTAM.slice<0,6>());
-	// 2. convert to se3
-	predConvert->setPosRPY(PTAMPoseGuess[0], PTAMPoseGuess[1], PTAMPoseGuess[2], PTAMPoseGuess[3], PTAMPoseGuess[4], PTAMPoseGuess[5]);
-	// 3. multiply with rotation matrix	
-	TooN::SE3<> PTAMPoseGuessSE3 = predConvert->droneToFrontNT * predConvert->globaltoDrone;
-
-
-	// set
-	mpTracker->setPredictedCamFromW(PTAMPoseGuessSE3);
-	//mpTracker->setLastFrameLost((isGoodCount < -10), (videoFrameID%2 != 0));
-	mpTracker->setLastFrameLost((isGoodCount < -20), (mimFrameSEQ_workingCopy%3 == 0));
-
-	// track
-	ros::Time startedPTAM = ros::Time::now();
-	mpTracker->TrackFrame(mimFrameBW_workingCopy, true);
-	TooN::SE3<> PTAMResultSE3 = mpTracker->GetCurrentPose();
-	lastPTAMMessage = msg = mpTracker->GetMessageForUser();
-	ros::Duration timePTAM= ros::Time::now() - startedPTAM;
-
-	TooN::Vector<6> PTAMResultSE3TwistOrg = PTAMResultSE3.ln();
-
-	node->publishTf(mpTracker->GetCurrentPose(),mimFrameTimeRos_workingCopy, mimFrameSEQ_workingCopy,"cam_front");
-
-
-	// 1. multiply from left by frontToDroneNT.
-	// 2. convert to xyz,rpy
-	predConvert->setPosSE3_globalToDrone(predConvert->frontToDroneNT * PTAMResultSE3);
-	TooN::Vector<6> PTAMResult = TooN::makeVector(predConvert->x, predConvert->y, predConvert->z, predConvert->roll, predConvert->pitch, predConvert->yaw);
-
-	// 3. transform with filter
-	TooN::Vector<6> PTAMResultTransformed = filter->transformPTAMObservation(PTAMResult);
-
-
-
-
-	// init failed?
-	if(mpTracker->lastStepResult == mpTracker->I_FAILED)
-	{
-		ROS_INFO("initializing PTAM failed, resetting!");
-		resetPTAMRequested = true;
-	}
-	if(mpTracker->lastStepResult == mpTracker->I_SECOND)
-	{
-		PTAMInitializedClock = getMS();
-		filter->setCurrentScales(TooN::makeVector(mpMapMaker->initialScaleFactor*1.2,mpMapMaker->initialScaleFactor*1.2,mpMapMaker->initialScaleFactor*1.2));
-		mpMapMaker->currentScaleFactor = filter->getCurrentScales()[0];
-		ROS_INFO("PTAM initialized!");
-		ROS_INFO("initial scale: %f\n",mpMapMaker->initialScaleFactor*1.2);
-		node->publishCommand("u l PTAM initialized (took second KF)");
-		framesIncludedForScaleXYZ = -1;
-		lockNextFrame = true;
-		imuOnlyPred->resetPos();
-	}
-	if(mpTracker->lastStepResult == mpTracker->I_FIRST)
-	{
-		node->publishCommand("u l PTAM initialization started (took first KF)");
-	}
-
-
-
-
-
-
-	// --------------------------- assess result ------------------------------
-	bool isGood = true;
-	bool isVeryGood = true;
-	// calculate absolute differences.
-	TooN::Vector<6> diffs = PTAMResultTransformed - filterPosePrePTAM.slice<0,6>();
-	for(int i=0;1<1;i++) diffs[i] = abs(diffs[i]);
-
-
-	if(filter->getNumGoodPTAMObservations() < 10 && mpMap->IsGood())
-	{
-		isGood = true;
-		isVeryGood = false;
-	}
-	else if(mpTracker->lastStepResult == mpTracker->I_FIRST ||
-		mpTracker->lastStepResult == mpTracker->I_SECOND || 
-		mpTracker->lastStepResult == mpTracker->I_FAILED ||
-		mpTracker->lastStepResult == mpTracker->T_LOST ||
-		mpTracker->lastStepResult == mpTracker->NOT_TRACKING ||
-		mpTracker->lastStepResult == mpTracker->INITIALIZING)
-		isGood = isVeryGood = false;
-	else
-	{
-		// some chewy heuristic when to add and when not to.
-		bool dodgy = mpTracker->lastStepResult == mpTracker->T_DODGY ||
-			mpTracker->lastStepResult == mpTracker->T_RECOVERED_DODGY;
-
-		// if yaw difference too big: something certainly is wrong.
-		// maximum difference is 5 + 2*(number of seconds since PTAM observation).
-		double maxYawDiff = 10.0 + (getMS()-lastGoodYawClock)*0.002;
-		if(maxYawDiff > 20) maxYawDiff = 1000;
-		if(false && diffs[5] > maxYawDiff) 
-			isGood = false;
-
-		if(diffs[5] < 10) 
-			lastGoodYawClock = getMS();
-
-		if(diffs[5] > 4.0) 
-			isVeryGood = false;
-
-		// if rp difference too big: something certainly is wrong.
-		if(diffs[3] > 20 || diffs[4] > 20)
-			isGood = false;
-
-		if(diffs[3] > 3 || diffs[4] > 3 || dodgy)
-			isVeryGood = false;
-	}
-
-	if(isGood)
-	{
-		if(isGoodCount < 0) isGoodCount = 0;
-		isGoodCount++;
-	}
-	else
-	{
-		if(isGoodCount > 0) isGoodCount = 0;
-		isGoodCount--;
-		
-		if(mpTracker->lastStepResult == mpTracker->T_RECOVERED_DODGY)
-			isGoodCount = std::max(isGoodCount,-2);
-		if(mpTracker->lastStepResult == mpTracker->T_RECOVERED_GOOD)
-			isGoodCount = std::max(isGoodCount,-5);
-
-	}
-
-	TooN::Vector<10> filterPosePostPTAM;
-	// --------------------------- scale estimation & update filter (REDONE) -----------------------------
-	// interval length is always between 1s and 2s, to enshure approx. same variances.
-	// if interval contained height inconsistency, z-distances are simply both set to zero, which does not generate a bias.
-	// otherwise distances are scaled such that height is weighted more.
-	// if isGood>=3 && framesIncludedForScale < 0			===> START INTERVAL
-	// if 18 <= framesIncludedForScale <= 36 AND isGood>=3	===> ADD INTERVAL, START INTERVAL
-	// if framesIncludedForScale > 36						===> set framesIncludedForScale=-1 
-
-	// include!
-
-	// TODO: make shure filter is handled properly with permanent roll-forwards.
-	pthread_mutex_lock( &filter->filter_CS );
-	if(filter->usePTAM && isGoodCount >= 3)
-	{
-		filter->addPTAMObservation(PTAMResult,mimFrameTime_workingCopy-filter->delayVideo);
-	}
-	else
-		filter->addFakePTAMObservation(mimFrameTime_workingCopy-filter->delayVideo);
-
-	filterPosePostPTAM = filter->getCurrentPoseSpeedAsVec();
-	pthread_mutex_unlock( &filter->filter_CS );
-
-	TooN::Vector<6> filterPosePostPTAMBackTransformed = filter->backTransformPTAMObservation(filterPosePostPTAM.slice<0,6>());
-
-
-	// if interval is started: add one step.
-	int includedTime = mimFrameTime_workingCopy - ptamPositionForScaleTakenTimestamp;
-	if(framesIncludedForScaleXYZ >= 0) framesIncludedForScaleXYZ++;
-
-	// if interval is overdue: reset & dont add
-	if(includedTime > 3000) 
-	{
-		framesIncludedForScaleXYZ = -1;
-	}
-
-	if(isGoodCount >= 3)
-	{
-		// filter stuff
-		lastScaleEKFtimestamp = mimFrameTime_workingCopy;
-
-		if(includedTime >= 2000 && framesIncludedForScaleXYZ > 1)	// ADD! (if too many, was resetted before...)
-		{
-			TooN::Vector<3> diffPTAM = filterPosePostPTAMBackTransformed.slice<0,3>() - PTAMPositionForScale;
-			bool zCorrupted, allCorrupted;
-			float pressureStart = 0, pressureEnd = 0;
-			TooN::Vector<3> diffIMU = evalNavQue(ptamPositionForScaleTakenTimestamp - filter->delayVideo + filter->delayXYZ,mimFrameTime_workingCopy - filter->delayVideo + filter->delayXYZ,&zCorrupted, &allCorrupted, &pressureStart, &pressureEnd);
-
-			pthread_mutex_lock(&logScalePairs_CS);
-			if(logfileScalePairs != 0)
-				(*logfileScalePairs) <<
-						pressureStart << " " <<
-						pressureEnd << " " <<
-						diffIMU[2] << " " <<
-						diffPTAM[2] << std::endl;
-			pthread_mutex_unlock(&logScalePairs_CS);
-
-
-			if(!allCorrupted)
-			{
-				// filtering: z more weight, but only if not corrupted.
-				double xyFactor = 0.05;
-				double zFactor = zCorrupted ? 0 : 3;
-			
-				diffPTAM.slice<0,2>() *= xyFactor; diffPTAM[2] *= zFactor;
-				diffIMU.slice<0,2>() *= xyFactor; diffIMU[2] *= zFactor;
-
-				filter->updateScaleXYZ(diffPTAM, diffIMU, PTAMResult.slice<0,3>());
-				mpMapMaker->currentScaleFactor = filter->getCurrentScales()[0];
-			}
-			framesIncludedForScaleXYZ = -1;	// causing reset afterwards
-		}
-
-		if(framesIncludedForScaleXYZ == -1)	// RESET!
-		{
-			framesIncludedForScaleXYZ = 0;
-			PTAMPositionForScale = filterPosePostPTAMBackTransformed.slice<0,3>();
-			//predIMUOnlyForScale->resetPos();	// also resetting z corrupted flag etc. (NOT REquired as reset is done in eval)
-			ptamPositionForScaleTakenTimestamp = mimFrameTime_workingCopy;
-		}
-	}
-	
-
-	if(lockNextFrame && isGood)
-	{
-		filter->scalingFixpoint = PTAMResult.slice<0,3>();
-		lockNextFrame = false;	
-		//filter->useScalingFixpoint = true;
-
-		snprintf(charBuf,500,"locking scale fixpoint to %.3f %.3f %.3f",PTAMResultTransformed[0], PTAMResultTransformed[1], PTAMResultTransformed[2]);
-		ROS_INFO(charBuf);
-		node->publishCommand(std::string("u l ")+charBuf);
-	}
-
-
-	// ----------------------------- Take KF? -----------------------------------
-	if(!mapLocked && isVeryGood && (forceKF || mpMap->vpKeyFrames.size() < maxKF || maxKF <= 1))
-	{
-		mpTracker->TakeKF(forceKF);
-		forceKF = false;
-	}
-
-	// ---------------- save PTAM status for KI --------------------------------
-	if(mpTracker->lastStepResult == mpTracker->NOT_TRACKING)
-		PTAMStatus = PTAM_IDLE;
-	else if(mpTracker->lastStepResult == mpTracker->I_FIRST ||
-		mpTracker->lastStepResult == mpTracker->I_SECOND ||
-		mpTracker->lastStepResult == mpTracker->T_TOOK_KF)
-		PTAMStatus = PTAM_TOOKKF;
-	else if(mpTracker->lastStepResult == mpTracker->INITIALIZING)
-		PTAMStatus = PTAM_INITIALIZING;
-	else if(isVeryGood)
-		PTAMStatus = PTAM_BEST;
-	else if(isGood)
-		PTAMStatus = PTAM_GOOD;
-	else if(mpTracker->lastStepResult == mpTracker->T_DODGY ||
-		mpTracker->lastStepResult == mpTracker->T_GOOD)
-		PTAMStatus = PTAM_FALSEPOSITIVE;
-	else
-		PTAMStatus = PTAM_LOST;
-
-	 
-	// ----------------------------- update shallow map --------------------------
-	if(!mapLocked && rand()%5==0)
-	{
-		pthread_mutex_lock(&shallowMapCS);
-		mapPointsTransformed.clear();
-		keyFramesTransformed.clear();
-		for(unsigned int i=0;i<mpMap->vpKeyFrames.size();i++)
-		{
-			predConvert->setPosSE3_globalToDrone(predConvert->frontToDroneNT * mpMap->vpKeyFrames[i]->se3CfromW);
-			TooN::Vector<6> CamPos = TooN::makeVector(predConvert->x, predConvert->y, predConvert->z, predConvert->roll, predConvert->pitch, predConvert->yaw);
-			CamPos = filter->transformPTAMObservation(CamPos);
-			predConvert->setPosRPY(CamPos[0], CamPos[1], CamPos[2], CamPos[3], CamPos[4], CamPos[5]);
-			keyFramesTransformed.push_back(predConvert->droneToGlobal);
-		}
-		TooN::Vector<3> PTAMScales = filter->getCurrentScales();
-		TooN::Vector<3> PTAMOffsets = filter->getCurrentOffsets().slice<0,3>();
-		for(unsigned int i=0;i<mpMap->vpPoints.size();i++)
-		{
-			TooN::Vector<3> pos = (mpMap->vpPoints)[i]->v3WorldPos;
-			pos[0] *= PTAMScales[0];
-			pos[1] *= PTAMScales[1];
-			pos[2] *= PTAMScales[2];
-			pos += PTAMOffsets;
-			mapPointsTransformed.push_back(pos);
-		}
-
-		// flush map keypoints
-		if(flushMapKeypoints)
-		{
-			std::ofstream* fle = new std::ofstream();
-			fle->open("pointcloud.txt");
-
-			for(unsigned int i=0;i<mapPointsTransformed.size();i++)
-			{
-				(*fle) << mapPointsTransformed[i][0] << " "
-					   << mapPointsTransformed[i][1] << " "
-					   << mapPointsTransformed[i][2] << std::endl;
-			}
-
-			fle->flush();
-			fle->close();
-
-			printf("FLUSHED %d KEYPOINTS to file pointcloud.txt\n\n",mapPointsTransformed.size());
-
-			flushMapKeypoints = false;
-		}
-
-
-		pthread_mutex_unlock(&shallowMapCS);
+    // ------------------------ do PTAM -------------------------
+    myGLWindow->SetupViewport();
+    myGLWindow->SetupVideoOrtho();
+    myGLWindow->SetupVideoRasterPosAndZoom();
+
+
+
+    // 1. transform with filter
+    TooN::Vector<6> PTAMPoseGuess = filter->backTransformPTAMObservation(filterPosePrePTAM.slice<0,6>());
+    // 2. convert to se3
+    predConvert->setPosRPY(PTAMPoseGuess[0]*filter->getCurrentScales()[0], PTAMPoseGuess[1]*filter->getCurrentScales()[0], PTAMPoseGuess[2]*filter->getCurrentScales()[0], PTAMPoseGuess[3], PTAMPoseGuess[4], PTAMPoseGuess[5]);
+    // 3. multiply with rotation matrix	
+    TooN::SE3<> PTAMPoseGuessSE3 = predConvert->droneToFrontNT * predConvert->globaltoDrone;
+
+
+    // set
+    // if (gToggle){ // [Devesh]
+        mpTracker->setPredictedCamFromW(PTAMPoseGuessSE3);
+    // }
+    std::cout << "z value" << PTAMPoseGuess[1] << " " << PTAMPoseGuess[2] << std::endl;
+    std::cout << PTAMPoseGuessSE3.get_translation() << std::endl;
+    std::cout << PTAMPoseGuessSE3.get_rotation() << std::endl;
+    //mpTracker->setLastFrameLost((isGoodCount < -10), (videoFrameID%2 != 0));
+    mpTracker->setLastFrameLost((isGoodCount < -20), (mimFrameSEQ_workingCopy%3 == 0));
+
+    // track
+    ros::Time startedPTAM = ros::Time::now();
+    mpTracker->TrackFrame(mimFrameBW_workingCopy, true);
+    TooN::SE3<> PTAMResultSE3 = mpTracker->GetCurrentPose();
+    lastPTAMMessage = msg = mpTracker->GetMessageForUser();
+    ros::Duration timePTAM= ros::Time::now() - startedPTAM;
+
+    TooN::Vector<6> PTAMResultSE3TwistOrg = PTAMResultSE3.ln();
+
+    node->publishTf(mpTracker->GetCurrentPose(),mimFrameTimeRos_workingCopy, mimFrameSEQ_workingCopy,"cam_front");
+
+
+    // 1. multiply from left by frontToDroneNT.
+    // 2. convert to xyz,rpy
+    predConvert->setPosSE3_globalToDrone(predConvert->frontToDroneNT * PTAMResultSE3);
+    TooN::Vector<6> PTAMResult = TooN::makeVector(predConvert->x, predConvert->y, predConvert->z, predConvert->roll, predConvert->pitch, predConvert->yaw);
+
+    // 3. transform with filter
+    TooN::Vector<6> PTAMResultTransformed = filter->transformPTAMObservation(PTAMResult);
+
+
+
+
+    // init failed?
+    if(mpTracker->lastStepResult == mpTracker->I_FAILED)
+    {
+        ROS_INFO("initializing PTAM failed, resetting!");
+        resetPTAMRequested = true;
+    }
+    if(mpTracker->lastStepResult == mpTracker->I_SECOND)
+    {
+        PTAMInitializedClock = getMS();
+        filter->setCurrentScales(TooN::makeVector(mpMapMaker->initialScaleFactor*1.2,mpMapMaker->initialScaleFactor*1.2,mpMapMaker->initialScaleFactor*1.2));
+        // filter->setCurrentScales(TooN::makeVector(1,1,1));
+        mpMapMaker->currentScaleFactor = filter->getCurrentScales()[0];
+        ROS_INFO("PTAM initialized!");
+        ROS_INFO("initial scale: %f\n",mpMapMaker->initialScaleFactor*1.2);
+        node->publishCommand("u l PTAM initialized (took second KF)");
+        framesIncludedForScaleXYZ = -1;
+        lockNextFrame = true;
+        imuOnlyPred->resetPos();
+
+        // [Devesh]
+        gToggle = 0;
+    }
+    if(mpTracker->lastStepResult == mpTracker->I_FIRST)
+    {
+        node->publishCommand("u l PTAM initialization started (took first KF)");
+    }
+
+
+
+
+
+
+    // --------------------------- assess result ------------------------------
+    bool isGood = true;
+    bool isVeryGood = true;
+    // calculate absolute differences.
+    TooN::Vector<6> diffs = PTAMResultTransformed - filterPosePrePTAM.slice<0,6>();
+    for(int i=0;i<6;i++) diffs[i] = abs(diffs[i]);
+
+
+    if(filter->getNumGoodPTAMObservations() < 10 && mpMap->IsGood())
+    {
+        isGood = true;
+        // isVeryGood = false;
+        isVeryGood = true;
+    }
+    else if(mpTracker->lastStepResult == mpTracker->I_FIRST ||
+            mpTracker->lastStepResult == mpTracker->I_SECOND || 
+            mpTracker->lastStepResult == mpTracker->I_FAILED ||
+            mpTracker->lastStepResult == mpTracker->T_LOST ||
+            mpTracker->lastStepResult == mpTracker->NOT_TRACKING ||
+            mpTracker->lastStepResult == mpTracker->INITIALIZING)
+        isGood = isVeryGood = false;
+    else
+    {
+        // some chewy heuristic when to add and when not to.
+        bool dodgy = mpTracker->lastStepResult == mpTracker->T_DODGY ||
+            mpTracker->lastStepResult == mpTracker->T_RECOVERED_DODGY;
+
+        // if yaw difference too big: something certainly is wrong.
+        // maximum difference is 5 + 2*(number of seconds since PTAM observation).
+        double maxYawDiff = 10.0 + (getMS()-lastGoodYawClock)*0.002;
+        if(maxYawDiff > 20) maxYawDiff = 1000;
+        if(false && diffs[5] > maxYawDiff) 
+            isGood = false;
+
+        if(diffs[5] < 10) 
+            lastGoodYawClock = getMS();
+
+        if(diffs[5] > 4.0) 
+            isVeryGood = false;
+
+        // if rp difference too big: something certainly is wrong.
+        if(diffs[3] > 20 || diffs[4] > 20)
+            isGood = false;
+
+        if(diffs[3] > 3 || diffs[4] > 3 || dodgy)
+            isVeryGood = false;
+    }
+
+    if(isGood)
+    {
+        if(isGoodCount < 0) isGoodCount = 0;
+        isGoodCount++;
+    }
+    else
+    {
+        if(isGoodCount > 0) isGoodCount = 0;
+        isGoodCount--;
+
+        if(mpTracker->lastStepResult == mpTracker->T_RECOVERED_DODGY)
+            isGoodCount = std::max(isGoodCount,-2);
+        if(mpTracker->lastStepResult == mpTracker->T_RECOVERED_GOOD)
+            isGoodCount = std::max(isGoodCount,-5);
+
+    }
+
+    TooN::Vector<10> filterPosePostPTAM;
+    // --------------------------- scale estimation & update filter (REDONE) -----------------------------
+    // interval length is always between 1s and 2s, to enshure approx. same variances.
+    // if interval contained height inconsistency, z-distances are simply both set to zero, which does not generate a bias.
+    // otherwise distances are scaled such that height is weighted more.
+    // if isGood>=3 && framesIncludedForScale < 0			===> START INTERVAL
+    // if 18 <= framesIncludedForScale <= 36 AND isGood>=3	===> ADD INTERVAL, START INTERVAL
+    // if framesIncludedForScale > 36						===> set framesIncludedForScale=-1 
+
+    // include!
+
+    // TODO: make shure filter is handled properly with permanent roll-forwards.
+    pthread_mutex_lock( &filter->filter_CS );
+    if(filter->usePTAM && isGoodCount >= 3)
+    {
+        filter->addPTAMObservation(PTAMResult,mimFrameTime_workingCopy-filter->delayVideo);
+    }
+    else
+        filter->addFakePTAMObservation(mimFrameTime_workingCopy-filter->delayVideo);
+
+    filterPosePostPTAM = filter->getCurrentPoseSpeedAsVec();
+    pthread_mutex_unlock( &filter->filter_CS );
+
+    TooN::Vector<6> filterPosePostPTAMBackTransformed = filter->backTransformPTAMObservation(filterPosePostPTAM.slice<0,6>());
+
+
+    // if interval is started: add one step.
+    int includedTime = mimFrameTime_workingCopy - ptamPositionForScaleTakenTimestamp;
+    if(framesIncludedForScaleXYZ >= 0) framesIncludedForScaleXYZ++;
+
+    // if interval is overdue: reset & dont add
+    if(includedTime > 3000) 
+    {
+        framesIncludedForScaleXYZ = -1;
+    }
+
+    if(isGoodCount >= 3)
+    {
+        // filter stuff
+        lastScaleEKFtimestamp = mimFrameTime_workingCopy;
+
+        if(includedTime >= 2000 && framesIncludedForScaleXYZ > 1)	// ADD! (if too many, was resetted before...)
+        {
+            TooN::Vector<3> diffPTAM = filterPosePostPTAMBackTransformed.slice<0,3>() - PTAMPositionForScale;
+            bool zCorrupted, allCorrupted;
+            float pressureStart = 0, pressureEnd = 0;
+            TooN::Vector<3> diffIMU = evalNavQue(ptamPositionForScaleTakenTimestamp - filter->delayVideo + filter->delayXYZ,mimFrameTime_workingCopy - filter->delayVideo + filter->delayXYZ,&zCorrupted, &allCorrupted, &pressureStart, &pressureEnd);
+
+            pthread_mutex_lock(&logScalePairs_CS);
+            if(logfileScalePairs != 0)
+                (*logfileScalePairs) <<
+                    pressureStart << " " <<
+                    pressureEnd << " " <<
+                    diffIMU[2] << " " <<
+                    diffPTAM[2] << std::endl;
+            pthread_mutex_unlock(&logScalePairs_CS);
+
+
+            if(!allCorrupted)
+            {
+                // filtering: z more weight, but only if not corrupted.
+                double xyFactor = 0.05;
+                double zFactor = zCorrupted ? 0 : 3;
+
+                diffPTAM.slice<0,2>() *= xyFactor; diffPTAM[2] *= zFactor;
+                diffIMU.slice<0,2>() *= xyFactor; diffIMU[2] *= zFactor;
+
+                filter->updateScaleXYZ(diffPTAM, diffIMU, PTAMResult.slice<0,3>());
+                mpMapMaker->currentScaleFactor = filter->getCurrentScales()[0];
+            }
+            framesIncludedForScaleXYZ = -1;	// causing reset afterwards
+        }
+
+        if(framesIncludedForScaleXYZ == -1)	// RESET!
+        {
+            framesIncludedForScaleXYZ = 0;
+            PTAMPositionForScale = filterPosePostPTAMBackTransformed.slice<0,3>();
+            //predIMUOnlyForScale->resetPos();	// also resetting z corrupted flag etc. (NOT REquired as reset is done in eval)
+            ptamPositionForScaleTakenTimestamp = mimFrameTime_workingCopy;
+        }
+    }
+
+
+    if(lockNextFrame && isGood)
+    {
+        filter->scalingFixpoint = PTAMResult.slice<0,3>();
+        lockNextFrame = false;	
+        //filter->useScalingFixpoint = true;
+
+        snprintf(charBuf,500,"locking scale fixpoint to %.3f %.3f %.3f",PTAMResultTransformed[0], PTAMResultTransformed[1], PTAMResultTransformed[2]);
+        ROS_INFO(charBuf);
+        node->publishCommand(std::string("u l ")+charBuf);
+    }
+
+
+    // ----------------------------- Take KF? -----------------------------------
+    // if(!mapLocked && isVeryGood && (forceKF || mpMap->vpKeyFrames.size() < maxKF || maxKF <= 1))
+    // Devesh
+    if(!mapLocked && isGood && (forceKF || mpMap->vpKeyFrames.size() < maxKF || maxKF <= 1))
+    {
+        mpTracker->TakeKF(forceKF);
+        forceKF = false;
+
+        if(mpTracker->lastStepResult == Tracker::T_TOOK_KF)
+        {
+            // print out pose of this frame 
+            gFrameCount++;
+
+            std::cerr << "frame " << gFrameCount << " pose" << std::endl;
+            std::cerr << PTAMResultSE3.get_translation() << std::endl;
+            std::cerr << PTAMResultSE3.get_rotation();
+
+            // and print out the pose from IMU 
+            std::cerr << "transformed frame pose" << std::endl;
+            std::cerr << PTAMResultTransformed << std::endl;
+            std::cerr << "transformed imu pose" << std::endl;
+            std::cerr << filterPosePrePTAM.slice<0,6>() << std::endl << std::endl;
+
+        }
+    }
+
+    // ---------------- save PTAM status for KI --------------------------------
+    if(mpTracker->lastStepResult == mpTracker->NOT_TRACKING)
+        PTAMStatus = PTAM_IDLE;
+    else if(mpTracker->lastStepResult == mpTracker->I_FIRST ||
+            mpTracker->lastStepResult == mpTracker->I_SECOND ||
+            mpTracker->lastStepResult == mpTracker->T_TOOK_KF)
+        PTAMStatus = PTAM_TOOKKF;
+    else if(mpTracker->lastStepResult == mpTracker->INITIALIZING)
+        PTAMStatus = PTAM_INITIALIZING;
+    else if(isVeryGood)
+        PTAMStatus = PTAM_BEST;
+    else if(isGood)
+        PTAMStatus = PTAM_GOOD;
+    else if(mpTracker->lastStepResult == mpTracker->T_DODGY ||
+            mpTracker->lastStepResult == mpTracker->T_GOOD)
+        PTAMStatus = PTAM_FALSEPOSITIVE;
+    else
+        PTAMStatus = PTAM_LOST;
+
+
+    // ----------------------------- update shallow map --------------------------
+    if(!mapLocked && rand()%5==0)
+    {
+        pthread_mutex_lock(&shallowMapCS);
+        mapPointsTransformed.clear();
+        keyFramesTransformed.clear();
+        for(unsigned int i=0;i<mpMap->vpKeyFrames.size();i++)
+        {
+            predConvert->setPosSE3_globalToDrone(predConvert->frontToDroneNT * mpMap->vpKeyFrames[i]->se3CfromW);
+            TooN::Vector<6> CamPos = TooN::makeVector(predConvert->x, predConvert->y, predConvert->z, predConvert->roll, predConvert->pitch, predConvert->yaw);
+            CamPos = filter->transformPTAMObservation(CamPos);
+            predConvert->setPosRPY(CamPos[0], CamPos[1], CamPos[2], CamPos[3], CamPos[4], CamPos[5]);
+            keyFramesTransformed.push_back(predConvert->droneToGlobal);
+        }
+        TooN::Vector<3> PTAMScales = filter->getCurrentScales();
+        TooN::Vector<3> PTAMOffsets = filter->getCurrentOffsets().slice<0,3>();
+        for(unsigned int i=0;i<mpMap->vpPoints.size();i++)
+        {
+            TooN::Vector<3> pos = (mpMap->vpPoints)[i]->v3WorldPos;
+            pos[0] *= PTAMScales[0];
+            pos[1] *= PTAMScales[1];
+            pos[2] *= PTAMScales[2];
+            pos += PTAMOffsets;
+            mapPointsTransformed.push_back(pos);
+        }
+
+        // flush map keypoints
+        if(flushMapKeypoints)
+        {
+            std::ofstream* fle = new std::ofstream();
+            fle->open("pointcloud.txt");
+
+            for(unsigned int i=0;i<mapPointsTransformed.size();i++)
+            {
+                (*fle) << mapPointsTransformed[i][0] << " "
+                    << mapPointsTransformed[i][1] << " "
+                    << mapPointsTransformed[i][2] << std::endl;
+            }
+
+            fle->flush();
+            fle->close();
+
+            printf("FLUSHED %d KEYPOINTS to file pointcloud.txt\n\n",mapPointsTransformed.size());
+
+            flushMapKeypoints = false;
+        }
+
+
+        pthread_mutex_unlock(&shallowMapCS);
 
 	}
 

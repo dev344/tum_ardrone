@@ -39,13 +39,13 @@ void KeyFrame::MakeKeyFrame_Lite(BasicImage<byte> &im)
       lev.vCandidates.clear();
       lev.vMaxCorners.clear();
       if(i == 0)
-	fast_corner_detect_10(lev.im, lev.vCorners, 10);
+	fast_corner_detect_9(lev.im, lev.vCorners, 10);
       if(i == 1)
-	fast_corner_detect_10(lev.im, lev.vCorners, 15);
+	fast_corner_detect_9(lev.im, lev.vCorners, 15);
       if(i == 2)
-	fast_corner_detect_10(lev.im, lev.vCorners, 15);
+	fast_corner_detect_9(lev.im, lev.vCorners, 15);
       if(i == 3)
-	fast_corner_detect_10(lev.im, lev.vCorners, 10);
+	fast_corner_detect_9(lev.im, lev.vCorners, 10);
       
       // Generate row look-up-table for the FAST corner points: this speeds up 
       // finding close-by corner points later on.

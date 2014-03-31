@@ -55,6 +55,31 @@ int PatchFinder::CalcSearchLevelAndWarpMatrix(MapPoint &p,
       mnSearchLevel++;
       dDet *= 0.25;
     };
+
+  // [Devesh] Pruning bad points here.
+  //
+  // Idea 1: Greater than a certain rotation, the points 
+  // are kicked out.
+  //
+  // Idea 2: Hmmm, based on depth, remove occluded points.
+
+  Vector<3> unit_vector = makeVector(1, 0, 0);
+  Vector<3> result1 = se3CFromW.get_rotation() * unit_vector;
+  // result1 /= sqrt( result1[0]*result1[0] + 
+  //                  result1[1]*result1[1] + 
+  //                  result1[2]*result1[2]);
+
+  Vector<3> result2 = (p.pPatchSourceKF)->se3CfromW.get_rotation() * unit_vector;
+  // result2 /= sqrt( result2[0]*result2[0] + 
+  //                  result2[1]*result2[1] + 
+  //                  result2[2]*result2[2]);
+
+  double dot = result1 * result2;
+
+  if(dot < 0.2)
+  {
+      return -1;
+  }
   
   // Some warps are inappropriate, e.g. too near the camera, too far, or reflected, 
   // or zero area.. reject these!

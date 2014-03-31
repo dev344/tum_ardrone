@@ -454,8 +454,9 @@ bool Bundle::Do_LM_Step(bool *pbAbortSignal)
 	  vMapUpdates.slice(i * 3, 3) = mvPoints[i].m3VStarInv * v3;
 	  if(isnan(vMapUpdates.slice(i * 3, 3) * vMapUpdates.slice(i * 3, 3)))
 	    {
-	      cerr << "NANNERY! " << endl;
-	      cerr << mvPoints[i].m3VStarInv << endl;
+            // [Devesh] Commenting out these two nanneries.
+	      // cerr << "NANNERY! " << endl;
+	      // cerr << mvPoints[i].m3VStarInv << endl;
 	    };
 	}
       

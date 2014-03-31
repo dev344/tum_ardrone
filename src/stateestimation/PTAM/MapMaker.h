@@ -22,6 +22,11 @@
 #include "ATANCamera.h"
 #include <queue>
 
+#include "ros/ros.h"
+#include "std_msgs/String.h"
+
+#include <sstream>
+
 
 // Each MapPoint has an associated MapMakerData class
 // Where the mapmaker can store extra information
@@ -66,6 +71,11 @@ public:
   double minKFDist;
   double lastMetricDist;
   double lastWiggleDist;
+
+  ros::NodeHandle n;
+  ros::Publisher chatter_pub;
+  std_msgs::String msg;
+  std::stringstream ss;
 
 protected:
   

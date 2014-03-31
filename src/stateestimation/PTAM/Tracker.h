@@ -31,6 +31,8 @@
 #include <vector>
 #include <list>
 
+#include "ros/ros.h"
+#include "std_msgs/String.h"
 
 class TrackerData;
 struct Trail    // This struct is used for initial correspondences of the first stereo pair.
@@ -69,6 +71,12 @@ public:
   // the value of this at I_SECOND will be approx. the second keyframe's position (or at least the translation will be scaled respectively).
   inline void setPredictedCamFromW(SE3<>& camFromW) {predictedCFromW = camFromW;}
   inline void setLastFrameLost(bool lost, bool useGuessForRecovery = false) {lastFrameLost = lost; useGuess = useGuessForRecovery;};
+
+  // Devesh
+  ros::NodeHandle n;
+  ros::Publisher mappoints_pub;
+  std_msgs::String msg;
+  std::stringstream ss;
 
 protected:
   KeyFrame mCurrentKF;            // The current working frame as a keyframe struct
