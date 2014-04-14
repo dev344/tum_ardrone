@@ -262,6 +262,10 @@ void PTAMWrapper::HandleFrame() {
 	//filter->predictUpTo(mimFrameTime,true, true);
 	TooN::Vector<10> filterPosePrePTAM = filter->getPoseAtAsVec(
 			mimFrameTime_workingCopy - filter->delayVideo, true);
+//	std::cout << "[ziquan] filterPosePrePTAM: " << filterPosePrePTAM[0] << ", "
+//			<< filterPosePrePTAM[1] << ", " << filterPosePrePTAM[2] << ", "
+//			<< filterPosePrePTAM[3] << ", " << filterPosePrePTAM[4] << ", "
+//			<< filterPosePrePTAM[5] << std::endl;
 	pthread_mutex_unlock(&filter->filter_CS);
 
 	// ------------------------ do PTAM -------------------------
@@ -278,17 +282,23 @@ void PTAMWrapper::HandleFrame() {
 	// 3. multiply with rotation matrix	
 	TooN::SE3<> PTAMPoseGuessSE3 = predConvert->droneToFrontNT
 			* predConvert->globaltoDrone;
+	// [ziquan] std::cout << "[ziquan] PTAMPoseGuessSE3 T: " << PTAMPoseGuessSE3.get_translation() << std::endl;
+	// [ziquan] std::cout << "R: " << PTAMPoseGuessSE3.get_rotation() << std::endl << std::endl;
 
 	// set
 	mpTracker->setPredictedCamFromW(PTAMPoseGuessSE3);
+	// mpTracker->setPriorCamFromW(PTAMPoseGuessSE3);
 	//mpTracker->setLastFrameLost((isGoodCount < -10), (videoFrameID%2 != 0));
-	mpTracker->setLastFrameLost((isGoodCount < -20),
-			(mimFrameSEQ_workingCopy % 3 == 0));
+	// [ziquan] this function is totally useless. mpTracker->setLastFrameLost((isGoodCount < -20), (mimFrameSEQ_workingCopy % 3 == 0));
 
 	// track
 	ros::Time startedPTAM = ros::Time::now();
+	// [ziquan] std::cout << "[ziquan] before TrackFrame: " << std::endl << mpTracker->GetCurrentPose() << std::endl;
 	mpTracker->TrackFrame(mimFrameBW_workingCopy, true);
+	// [ziquan] std::cout << "[ziquan] After TrackFrame: " << std::endl <<  mpTracker->GetCurrentPose() << std::endl << std::endl;
 	TooN::SE3<> PTAMResultSE3 = mpTracker->GetCurrentPose();
+	// [ziquan] std::cout << "[ziquan] PTAMResultSE3 T: " << PTAMResultSE3.get_translation() << std::endl;
+	// [ziquan] std::cout << "R: " << PTAMResultSE3.get_rotation() << std::endl << std::endl;
 	lastPTAMMessage = msg = mpTracker->GetMessageForUser();
 	ros::Duration timePTAM = ros::Time::now() - startedPTAM;
 
@@ -308,7 +318,11 @@ void PTAMWrapper::HandleFrame() {
 	// 3. transform with filter
 	TooN::Vector<6> PTAMResultTransformed = filter->transformPTAMObservation(
 			PTAMResult);
-
+//	std::cout << "[ziquan] PTAMResultTransformed: " << PTAMResultTransformed[0]
+//			<< ", " << PTAMResultTransformed[1] << ", "
+//			<< PTAMResultTransformed[2] << ", " << PTAMResultTransformed[3]
+//			<< ", " << PTAMResultTransformed[4] << ", "
+//			<< PTAMResultTransformed[5] << std::endl;
 	// init failed?
 	if (mpTracker->lastStepResult == mpTracker->I_FAILED) {
 		ROS_INFO("initializing PTAM failed, resetting!");
@@ -317,12 +331,12 @@ void PTAMWrapper::HandleFrame() {
 	if (mpTracker->lastStepResult == mpTracker->I_SECOND) {
 		PTAMInitializedClock = getMS();
 		filter->setCurrentScales(
-				TooN::makeVector(mpMapMaker->initialScaleFactor * 1.2,
-						mpMapMaker->initialScaleFactor * 1.2,
-						mpMapMaker->initialScaleFactor * 1.2));
+				TooN::makeVector(mpMapMaker->initialScaleFactor, // * 1.2,
+						mpMapMaker->initialScaleFactor,	// * 1.2,
+						mpMapMaker->initialScaleFactor));	// * 1.2));
 		mpMapMaker->currentScaleFactor = filter->getCurrentScales()[0];
 		ROS_INFO("PTAM initialized!");
-		ROS_INFO("initial scale: %f\n", mpMapMaker->initialScaleFactor * 1.2);
+		ROS_INFO("initial scale: %f\n", mpMapMaker->initialScaleFactor);// * 1.2);
 		node->publishCommand("u l PTAM initialized (took second KF)");
 		framesIncludedForScaleXYZ = -1;
 		lockNextFrame = true;
@@ -396,7 +410,7 @@ void PTAMWrapper::HandleFrame() {
 
 	TooN::Vector<10> filterPosePostPTAM;
 	// --------------------------- scale estimation & update filter (REDONE) -----------------------------
-	// interval length is always between 1s and 2s, to enshure approx. same variances.
+	// interval length is always between 1s and 2s, to ensure approx. same variances.
 	// if interval contained height inconsistency, z-distances are simply both set to zero, which does not generate a bias.
 	// otherwise distances are scaled such that height is weighted more.
 	// if isGood>=3 && framesIncludedForScale < 0			===> START INTERVAL
@@ -405,7 +419,7 @@ void PTAMWrapper::HandleFrame() {
 
 	// include!
 
-	// TODO: make shure filter is handled properly with permanent roll-forwards.
+	// TODO: make sure filter is handled properly with permanent roll-forwards.
 	pthread_mutex_lock(&filter->filter_CS);
 	if (filter->usePTAM && isGoodCount >= 3) {
 		filter->addPTAMObservation(PTAMResult,
@@ -415,13 +429,17 @@ void PTAMWrapper::HandleFrame() {
 				mimFrameTime_workingCopy - filter->delayVideo);
 
 	filterPosePostPTAM = filter->getCurrentPoseSpeedAsVec();
+//	std::cout << "[ziquan] filterPosePostPTAM: " << filterPosePostPTAM[0] << ", "
+//			<< filterPosePostPTAM[1] << ", " << filterPosePostPTAM[2] << ", "
+//			<< filterPosePostPTAM[3] << ", " << filterPosePostPTAM[4] << ", "
+//			<< filterPosePostPTAM[5] << std::endl << std::endl;
 	pthread_mutex_unlock(&filter->filter_CS);
 
 	TooN::Vector<6> filterPosePostPTAMBackTransformed =
 			filter->backTransformPTAMObservation(
 					filterPosePostPTAM.slice<0, 6>());
 
-	// if interval is started: add one step.
+	// if interval is started: add one sample.
 	int includedTime = mimFrameTime_workingCopy
 			- ptamPositionForScaleTakenTimestamp;
 	if (framesIncludedForScaleXYZ >= 0)
@@ -434,10 +452,10 @@ void PTAMWrapper::HandleFrame() {
 
 	if (isGoodCount >= 3) {
 		// filter stuff
-		lastScaleEKFtimestamp = mimFrameTime_workingCopy;
+		lastScaleEKFtimestamp = mimFrameTime_workingCopy;// lastScaleEKFtimestamp is not used elsewhere
 
-		if (includedTime >= 2000 && framesIncludedForScaleXYZ > 1)// ADD! (if too many, was resetted before...)
-				{
+		if (includedTime >= 2000 && framesIncludedForScaleXYZ > 1) {// ADD! (if too many, was reset before...)
+
 			TooN::Vector<3> diffPTAM = filterPosePostPTAMBackTransformed.slice<
 					0, 3>() - PTAMPositionForScale;
 			bool zCorrupted, allCorrupted;
@@ -472,8 +490,7 @@ void PTAMWrapper::HandleFrame() {
 			framesIncludedForScaleXYZ = -1;	// causing reset afterwards
 		}
 
-		if (framesIncludedForScaleXYZ == -1)	// RESET!
-				{
+		if (framesIncludedForScaleXYZ == -1) {	// RESET!
 			framesIncludedForScaleXYZ = 0;
 			PTAMPositionForScale =
 					filterPosePostPTAMBackTransformed.slice<0, 3>();
@@ -802,7 +819,7 @@ TooN::Vector<3> PTAMWrapper::evalNavQue(unsigned int from, unsigned int to,
 	int used = 0;
 	int firstZ = 0;
 
-	float sum_first = 0, num_first = 0, sum_last = 0, num_last = 0;
+	int sum_first = 0, num_first = 0, sum_last = 0, num_last = 0;
 	int pressureAverageRange = 100;
 
 	for (std::deque<ardrone_autonomy::Navdata>::iterator cur =
@@ -830,8 +847,8 @@ TooN::Vector<3> PTAMWrapper::evalNavQue(unsigned int from, unsigned int to,
 	for (std::deque<ardrone_autonomy::Navdata>::iterator cur =
 			navInfoQueue.begin(); cur != navInfoQueue.end(); cur++) {
 		int frontStamp = getMS(cur->header.stamp);
-		if (frontStamp < from)		// packages before: delete
-				{
+		if (frontStamp < from) {	// packages before: delete
+
 			//navInfoQueue.pop_front();
 			skipped++;
 		} else if (frontStamp >= from && frontStamp <= to) {
@@ -865,9 +882,11 @@ TooN::Vector<3> PTAMWrapper::evalNavQue(unsigned int from, unsigned int to,
 		printf("scalePackage z corrupted (jump in meters: %.3f)!\n",
 				predIMUOnlyForScale->zCorruptedJump);
 
-	printf("first: %f (%f); last: %f (%f)=> diff: %f (z alt diff: %f)\n",
-			sum_first / num_first, num_first, sum_last / num_last, num_last,
-			sum_last / num_last - sum_first / num_first,
+	printf("first: %f (%d); last: %f (%d) => diff: %f (z alt diff: %f)\n",
+			(float) sum_first / (float) num_first, num_first,
+			(float) sum_last / (float) num_last, num_last,
+			(float) sum_last / (float) num_last
+					- (float) sum_first / (float) num_first,
 			predIMUOnlyForScale->z);
 
 	*out_end_pressure = sum_last / num_last;

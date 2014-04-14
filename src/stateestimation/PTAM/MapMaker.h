@@ -61,7 +61,7 @@ public:
   bool IsDistanceToNearestKeyFrameExcessive(KeyFrame &kCurrent);  // Is the camera far away from the nearest KeyFrame (i.e. maybe lost?)
   
   double initialScaleFactor;
-  double currentScaleFactor;	// set exgternally for metric scale.
+  double currentScaleFactor;	// set externally for metric scale.
   double minKFWiggleDist;
   double minKFDist;
   double lastMetricDist;

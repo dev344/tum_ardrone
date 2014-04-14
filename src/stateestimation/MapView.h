@@ -50,6 +50,10 @@ public:
 		pointPTAM = ptam;
 		PTAMValid = true;
 	}
+	inline TrailPoint(TooN::Vector<3> filter, bool isPTAMValid){
+		pointFilter = filter;
+		PTAMValid = isPTAMValid;
+	}
 	TooN::Vector<3> pointPTAM;
 	TooN::Vector<3> pointFilter;
 	bool PTAMValid;
