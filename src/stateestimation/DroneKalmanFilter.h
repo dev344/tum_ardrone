@@ -372,8 +372,8 @@ public:
 		return numGoodPTAMObservations;
 	}
 
-	// when scaling factors are updated, exacly one point stays the same.
-	// if useScalingFixpoint, this point is the current PTAM pose, otherwise it is sclingFixpoint (which is a PTAM-coordinate(!))
+	// when scaling factors are updated, exactly one point stays the same.
+	// if useScalingFixpoint, this point is the current PTAM pose, otherwise it is scalingFixpoint (which is a PTAM-coordinate(!))
 	TooN::Vector<3> scalingFixpoint;	// in PTAM's system (!)
 	bool useScalingFixpoint;
 

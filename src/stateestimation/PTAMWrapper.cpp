@@ -917,8 +917,8 @@ void PTAMWrapper::newNavdata(ardrone_autonomy::Navdata* nav) {
 	pthread_mutex_lock(&navInfoQueueCS);
 	navInfoQueue.push_back(lastNavinfoReceived);
 
-	if (navInfoQueue.size() > 1000)	// respective 5s
-			{
+	if (navInfoQueue.size() > 1000) {	// respective 5s
+
 		navInfoQueue.pop_front();
 		if (!navQueueOverflown)
 			printf("NavQue Overflow detected!\n");

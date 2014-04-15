@@ -598,8 +598,8 @@ void DroneKalmanFilter::updateScaleXYZ(TooN::Vector<3> ptamDiff,
 
 	scale_from_xy = scale_Filtered_xy;
 	scale_from_z = scale_Filtered_z;
-	// update offsets such that no position change occurs (X = x_global*xy_scale_old + offset = x_global*xy_scale_new + new_offset)
-	// [ziquan] std::cout << "[ziquan] inspect useScalingFixpoint : " << (useScalingFixpoint ? "true" : "false") << std::endl;
+	//	update offsets such that no position change occurs (X = x_global*xy_scale_old + offset = x_global*xy_scale_new + new_offset)
+	//	[ziquan] std::cout << "[ziquan] inspect useScalingFixpoint : " << (useScalingFixpoint ? "true" : "false") << std::endl;
 	if (useScalingFixpoint) {
 		// fix at fixpoint
 		x_offset += (xyz_scale_old - xy_scale) * scalingFixpoint[0];
@@ -613,14 +613,15 @@ void DroneKalmanFilter::updateScaleXYZ(TooN::Vector<3> ptamDiff,
 	}
 	scale_xyz_initialized = true;
 
-	cout << "[ziquan] #scalePairs and scalingFixpoint and relative CI : " << scalePairs->size()
-			<< " [" << scalingFixpoint[0] << ", " << scalingFixpoint[1] << ", "
-			<< scalingFixpoint[2] << "] " << getScaleAccuracy() << endl;
+	cout << "[ziquan] #scalePairs and scalingFixpoint and relative CI : "
+			<< scalePairs->size() << " [" << scalingFixpoint[0] << ", "
+			<< scalingFixpoint[1] << ", " << scalingFixpoint[2] << "] "
+			<< getScaleAccuracy() << endl;
 }
 
 float DroneKalmanFilter::getScaleAccuracy() {
 	// [ziquan] proportional to the ratio between observed information and current scale, i.e. -l''(scale) / current scale
-	return 1.0 / std::sqrt(xyz_sum_IMUxIMU) / xy_scale;
+	return 1.0 / std::sqrt(xyz_sum_IMUxIMU) / getCurrentScales()[0];
 	// return 0.5 + 0.5 * std::min(1.0, std::max(0.0, xyz_sum_PTAMxIMU * xy_scale / 4));// scale-corrected PTAM x IMU
 }
 
