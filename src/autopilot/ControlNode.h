@@ -82,6 +82,8 @@ private:
 	double parameter_SpinSpeed;	// [ziquan]
 	double parameter_GSVScalar; // [ziquan]
 
+	// [ziquan] nasty force keyframe
+	int lastForceKFMS;
 
 	void popNextCommand(const tum_ardrone::filter_stateConstPtr statePtr);
 	void reSendInfo();

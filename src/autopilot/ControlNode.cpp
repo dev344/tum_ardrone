@@ -105,8 +105,11 @@ ControlNode::ControlNode() {
 	controller = DroneController();
 	controller.node = this;
 
-	// trajectory
+	// [ziquan] trajectory
 	trajectoryMaxSize = 300;
+
+	// [ziquan] force keyframe
+	lastForceKFMS = -1;
 }
 
 ControlNode::~ControlNode() {
@@ -118,6 +121,15 @@ void ControlNode::droneposeCb(
 		const tum_ardrone::filter_stateConstPtr statePtr) {
 	// do controlling
 	pthread_mutex_lock(&commandQueue_CS);
+
+	// nasty force keyframe every 1 second
+	if (lastForceKFMS < 0) {
+		lastForceKFMS = getMS();
+		publishCommand("p keyframe");	// take KF
+	} else if (getMS() - lastForceKFMS >= 1000) {
+		lastForceKFMS = getMS();
+		publishCommand("p keyframe");	// take KF
+	}
 
 	// good position, update trajectory
 	if (statePtr->ptamState == statePtr->PTAM_GOOD

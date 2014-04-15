@@ -486,8 +486,9 @@ void PTAMWrapper::HandleFrame() {
 				filter->updateScaleXYZ(diffPTAM, diffIMU,
 						PTAMResult.slice<0, 3>());
 				mpMapMaker->currentScaleFactor = filter->getCurrentScales()[0];
+				framesIncludedForScaleXYZ = -1;	// [ziquan] causing reset afterwards
 			}
-			framesIncludedForScaleXYZ = -1;	// causing reset afterwards
+			// framesIncludedForScaleXYZ = -1;	// causing reset afterwards
 		}
 
 		if (framesIncludedForScaleXYZ == -1) {	// RESET!

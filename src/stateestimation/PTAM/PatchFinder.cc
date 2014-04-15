@@ -83,6 +83,8 @@ int PatchFinder::CalcSearchLevelAndWarpMatrix(MapPoint &p, SE3<> se3CFromW,
 	if (dot < 0.2) {	// about 78.5 degree
 		return -1;
 	}
+	// [Devesh] end
+
 
 	// Some warps are inappropriate, e.g. too near the camera, too far, or reflected,
 	// or zero area.. reject these!
