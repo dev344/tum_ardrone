@@ -40,7 +40,8 @@
 #include <string>
 
 int gFrameCount = 1; // [Devesh] added this.
-int gToggle = 1; // [Devesh] added this.
+int gTracking = 0; // [Devesh] added this.
+int gToggle = 0; // [Devesh] added this.
 
 pthread_mutex_t PTAMWrapper::navInfoQueueCS = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t PTAMWrapper::shallowMapCS = PTHREAD_MUTEX_INITIALIZER;
@@ -78,6 +79,9 @@ PTAMWrapper::PTAMWrapper(DroneKalmanFilter* f, EstimationNode* nde)
 	maxKF = 60;
 
 	logfileScalePairs = 0;
+
+    // [Devesh]
+    scale_pub = n.advertise<std_msgs::String>("tum_ardrone/scale", 5000);
 }
 
 void PTAMWrapper::ResetInternal()
@@ -112,6 +116,10 @@ void PTAMWrapper::ResetInternal()
 	fleH >> camPar[0] >> camPar[1] >> camPar[2] >> camPar[3] >> camPar[4];
 	fleH.close();
 	std::cout<< "Set Camera Paramerer to: " << camPar[0] << " " << camPar[1] << " " << camPar[2] << " " << camPar[3] << " " << camPar[4] << std::endl;
+
+    // [Devesh]
+    gTracking = 0;
+    gToggle = 0;
 
 
 
@@ -273,7 +281,11 @@ void PTAMWrapper::HandleFrame()
     // --------------------------- ROLL FORWARD TIL FRAME. This is ONLY done here. ---------------------------
     pthread_mutex_lock( &filter->filter_CS );
     //filter->predictUpTo(mimFrameTime,true, true);
+
     TooN::Vector<10> filterPosePrePTAM = filter->getPoseAtAsVec(mimFrameTime_workingCopy-filter->delayVideo,true);
+
+    std::cout << filterPosePrePTAM << std::endl;
+
     pthread_mutex_unlock( &filter->filter_CS );
 
     // ------------------------ do PTAM -------------------------
@@ -286,18 +298,19 @@ void PTAMWrapper::HandleFrame()
     // 1. transform with filter
     TooN::Vector<6> PTAMPoseGuess = filter->backTransformPTAMObservation(filterPosePrePTAM.slice<0,6>());
     // 2. convert to se3
-    predConvert->setPosRPY(PTAMPoseGuess[0]*filter->getCurrentScales()[0], PTAMPoseGuess[1]*filter->getCurrentScales()[0], PTAMPoseGuess[2]*filter->getCurrentScales()[0], PTAMPoseGuess[3], PTAMPoseGuess[4], PTAMPoseGuess[5]);
+    // predConvert->setPosRPY(PTAMPoseGuess[0]*filter->getCurrentScales()[0], PTAMPoseGuess[1]*filter->getCurrentScales()[0], PTAMPoseGuess[2]*filter->getCurrentScales()[0], PTAMPoseGuess[3], PTAMPoseGuess[4], PTAMPoseGuess[5]);
+    predConvert->setPosRPY(PTAMPoseGuess[0], PTAMPoseGuess[1], PTAMPoseGuess[2], PTAMPoseGuess[3], PTAMPoseGuess[4], PTAMPoseGuess[5]);
     // 3. multiply with rotation matrix	
     TooN::SE3<> PTAMPoseGuessSE3 = predConvert->droneToFrontNT * predConvert->globaltoDrone;
 
 
     // set
-    // if (gToggle){ // [Devesh]
+    // if (gTracking){ // [Devesh]
         mpTracker->setPredictedCamFromW(PTAMPoseGuessSE3);
     // }
-    std::cout << "z value" << PTAMPoseGuess[1] << " " << PTAMPoseGuess[2] << std::endl;
+    std::cout << "z value " << PTAMPoseGuess[1] << " " << PTAMPoseGuess[2] << std::endl;
     std::cout << PTAMPoseGuessSE3.get_translation() << std::endl;
-    std::cout << PTAMPoseGuessSE3.get_rotation() << std::endl;
+    std::cout << PTAMPoseGuessSE3.get_rotation();
     //mpTracker->setLastFrameLost((isGoodCount < -10), (videoFrameID%2 != 0));
     mpTracker->setLastFrameLost((isGoodCount < -20), (mimFrameSEQ_workingCopy%3 == 0));
 
@@ -321,8 +334,8 @@ void PTAMWrapper::HandleFrame()
     // 3. transform with filter
     TooN::Vector<6> PTAMResultTransformed = filter->transformPTAMObservation(PTAMResult);
 
-
-
+    std::cout << "sc " << filter->xy_scale << " " << filter->z_scale << std::endl;
+    std::cout << "resul trans " << PTAMResultTransformed << std::endl << std::endl;
 
     // init failed?
     if(mpTracker->lastStepResult == mpTracker->I_FAILED)
@@ -344,16 +357,12 @@ void PTAMWrapper::HandleFrame()
         imuOnlyPred->resetPos();
 
         // [Devesh]
-        gToggle = 0;
+        gTracking = 1;
     }
     if(mpTracker->lastStepResult == mpTracker->I_FIRST)
     {
         node->publishCommand("u l PTAM initialization started (took first KF)");
     }
-
-
-
-
 
 
     // --------------------------- assess result ------------------------------
@@ -464,6 +473,7 @@ void PTAMWrapper::HandleFrame()
 
         if(includedTime >= 2000 && framesIncludedForScaleXYZ > 1)	// ADD! (if too many, was resetted before...)
         {
+            std::cout << "into 2000" << std::endl;
             TooN::Vector<3> diffPTAM = filterPosePostPTAMBackTransformed.slice<0,3>() - PTAMPositionForScale;
             bool zCorrupted, allCorrupted;
             float pressureStart = 0, pressureEnd = 0;
@@ -483,13 +493,24 @@ void PTAMWrapper::HandleFrame()
             {
                 // filtering: z more weight, but only if not corrupted.
                 double xyFactor = 0.05;
-                double zFactor = zCorrupted ? 0 : 3;
+                // double zFactor = zCorrupted ? 0 : 3;
+
+                // [Devesh]
+                double zFactor = zCorrupted ? 0 : 6;
 
                 diffPTAM.slice<0,2>() *= xyFactor; diffPTAM[2] *= zFactor;
                 diffIMU.slice<0,2>() *= xyFactor; diffIMU[2] *= zFactor;
 
                 filter->updateScaleXYZ(diffPTAM, diffIMU, PTAMResult.slice<0,3>());
                 mpMapMaker->currentScaleFactor = filter->getCurrentScales()[0];
+
+                ss << "s " << filter->getCurrentScales()[0] << std::endl;
+                scale_msg.data = ss.str();
+                ss.str(std::string());
+                scale_pub.publish(scale_msg);
+
+                // [Devesh]
+                // framesIncludedForScaleXYZ = -1;	// causing reset afterwards
             }
             framesIncludedForScaleXYZ = -1;	// causing reset afterwards
         }
@@ -506,6 +527,21 @@ void PTAMWrapper::HandleFrame()
 
     if(lockNextFrame && isGood)
     {
+        // [Devesh] Adding few lines here
+        std::cout << "scales " << filter->xy_scale << " " << filter->z_scale << std::endl;
+        std::cout << "p gues before " << PTAMPoseGuess << std::endl;
+        PTAMPoseGuess = filter->backTransformPTAMObservation(filterPosePrePTAM.slice<0,6>());
+        std::cout << "p gues after " << PTAMPoseGuess << std::endl;
+        std::cout << "p res before " << PTAMResult << std::endl;
+        predConvert->setPosRPY(PTAMPoseGuess[0], PTAMPoseGuess[1], PTAMPoseGuess[2], 
+                PTAMPoseGuess[3], PTAMPoseGuess[4], PTAMPoseGuess[5]);
+        predConvert->setPosSE3_globalToDrone(predConvert->frontToDroneNT * PTAMResultSE3);
+        PTAMResult = TooN::makeVector(predConvert->x, predConvert->y, 
+                predConvert->z, predConvert->roll, predConvert->pitch, predConvert->yaw);
+        std::cout << "p res after " << PTAMResult << std::endl;
+        PTAMResultTransformed = filter->transformPTAMObservation(PTAMResult);
+        // [Devesh] till here.
+
         filter->scalingFixpoint = PTAMResult.slice<0,3>();
         lockNextFrame = false;	
         //filter->useScalingFixpoint = true;
@@ -938,6 +974,54 @@ void PTAMWrapper::newImage(sensor_msgs::ImageConstPtr img)
 	// convert to CVImage
 	cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::MONO8);
 
+    // [Devesh]
+    // Black out everything apart from the ROI.
+
+    if (false) { // Testing
+        if (gTracking < 5) {
+            cv::Mat maskedImage; // stores masked Image
+
+            // create an Mat that has same Dimensons as src
+            cv::Mat mask(cv_ptr->image.size(),cv_ptr->image.type());
+
+            mask.setTo(cv::Scalar(0));  // creates black-Image
+
+            // Create a rectangle mask
+            {
+                // cv::Point center(320, 180); // CVRound converts floating numbers to integer
+                // int radius = cvRound(70);
+                int center_x = 320;
+                int center_y = 180;
+                int half_width = 160;
+                int half_height = 120;
+                cv::rectangle(mask, 
+                        cv::Point(center_x - half_width, center_y - half_height), 
+                        cv::Point(center_x + half_width, center_y + half_height), 
+                        cv::Scalar(255), -1, 8, 0); 
+            }
+
+            cv_ptr->image.copyTo(maskedImage, mask); // creates masked Image and copies it to maskedImage
+            cv_ptr->image = maskedImage;
+            gToggle = 0;
+
+            // This is to make sure that one forceKF 
+            // happens before the blacking is removed.
+            if (gTracking > 0) {
+                gTracking++;
+            }
+        }
+        else {
+            // if it has started tracking,
+            // then force keyframe the first two times it started.
+            // Later on, you need not force the keyframe.
+            if (gToggle < 20) {
+                if (gToggle%10 == 2){
+                    forceKF = true;
+                }
+                gToggle += 1;
+            }
+        }
+    }
 
 	boost::unique_lock<boost::mutex> lock(new_frame_signal_mutex);
 
@@ -957,7 +1041,7 @@ void PTAMWrapper::newImage(sensor_msgs::ImageConstPtr img)
 	if(mimFrameBW.size().x != img->width || mimFrameBW.size().y != img->height)
 		mimFrameBW.resize(CVD::ImageRef(img->width, img->height));
 
-	memcpy(mimFrameBW.data(),cv_ptr->image.data,img->width * img->height);
+	memcpy(mimFrameBW.data(), cv_ptr->image.data,img->width * img->height);
 	newImageAvailable = true;
 
 	lock.unlock();

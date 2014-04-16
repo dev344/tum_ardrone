@@ -7,9 +7,20 @@
 
 #include "settingsCustom.h"
 
+
+#include <opencv2/opencv.hpp>
+#include "sparsestereo/exception.h"
+#include "sparsestereo/extendedfast.h"
+#include "sparsestereo/stereorectification.h"
+#include "sparsestereo/sparsestereo-inl.h"
+#include "sparsestereo/census-inl.h"
+#include "sparsestereo/imageconversion.h"
+#include "sparsestereo/censuswindow.h"
+
 using namespace CVD;
 using namespace std;
 using namespace GVars3;
+using namespace sparsestereo;
 
 void KeyFrame::MakeKeyFrame_Lite(BasicImage<byte> &im)
 {
@@ -21,6 +32,13 @@ void KeyFrame::MakeKeyFrame_Lite(BasicImage<byte> &im)
   // First, copy out the image data to the pyramid's zero level.
   aLevels[0].im.resize(im.size());
   copy(im, aLevels[0].im);
+
+  // [Devesh]
+  // cv::FeatureDetector* detector = new ExtendedFAST(true, 10, 1.0, false, 2);
+  // vector<cv::KeyPoint> kp;
+
+  // cv::Mat image(aLevels[0].im.size().y, aLevels[0].im.size().x, CV_8UC1, (void*)aLevels[0].im.data());
+  // detector->detect(image, kp);
 
   // Then, for each level...
   for(int i=0; i<LEVELS; i++)
@@ -47,6 +65,7 @@ void KeyFrame::MakeKeyFrame_Lite(BasicImage<byte> &im)
       if(i == 3)
 	fast_corner_detect_9(lev.im, lev.vCorners, 10);
       
+      // cerr << "lev " << i << " corners " << lev.vCorners.size() << endl;
       // Generate row look-up-table for the FAST corner points: this speeds up 
       // finding close-by corner points later on.
       unsigned int v=0;
@@ -58,6 +77,7 @@ void KeyFrame::MakeKeyFrame_Lite(BasicImage<byte> &im)
 	  lev.vCornerRowLUT.push_back(v);
 	}
     };
+  // std::cerr << "corners " << kp.size() << endl;
 }
 
 void KeyFrame::MakeKeyFrame_Rest()

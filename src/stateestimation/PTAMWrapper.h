@@ -32,6 +32,10 @@
 #include "MouseKeyHandler.h"
 #include "boost/thread.hpp"
 
+// [Devesh]
+#include "ros/ros.h"
+#include "std_msgs/String.h"
+
 class Map;
 class MapMaker;
 class Tracker;
@@ -53,6 +57,14 @@ typedef TooN::SE3<> tse3;
 class PTAMWrapper : private CVD::Thread, private MouseKeyHandler
 {
 private:
+
+    // [Devesh]
+    ros::NodeHandle n;
+    ros::Publisher scale_pub;
+    std_msgs::String scale_msg;
+    std::stringstream ss;
+
+
 	// base window
 	GLWindow2* myGLWindow;
 	CVD::ImageRef desiredWindowSize;		// size the window scould get changed to if [changeSizeNextRender]

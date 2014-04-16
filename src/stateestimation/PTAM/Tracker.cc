@@ -861,6 +861,9 @@ void Tracker::TrackMap()
         double dSumSq = 0;
         int nNum = 0;
         ss << "-------" << endl;
+        if (lastStepResult == T_TOOK_KF){
+            ss << "KF taken" << endl;
+        }
         for(vector<TrackerData*>::iterator it = vIterationSet.begin();
                 it!= vIterationSet.end(); 
                 it++)
@@ -1075,7 +1078,6 @@ void Tracker::ApplyMotionModel()
     }
     std::cerr << "AMM\n" << mse3CamFromWorld.get_translation() << std::endl;
     std::cerr << mse3CamFromWorld.get_rotation() << std::endl;
-
 };
 
 

@@ -53,6 +53,13 @@ set(STATEESTIMATION_SOURCE_FILES
   src/stateestimation/PTAM/ShiTomasi.cc
   src/stateestimation/PTAM/SmallBlurryImage.cc
   src/stateestimation/PTAM/Tracker.cc
+  src/stateestimation/PTAM/sparsestereo/calibrationresult.cpp
+  src/stateestimation/PTAM/sparsestereo/census.cpp
+  src/stateestimation/PTAM/sparsestereo/stereorectification.cpp
+  src/stateestimation/PTAM/sparsestereo/sparserectification.cpp
+  src/stateestimation/PTAM/sparsestereo/imageconversion.cpp
+  src/stateestimation/PTAM/sparsestereo/extendedfast.cpp
+  src/stateestimation/PTAM/sparsestereo/hammingdistance.cpp
 )
 set(STATEESTIMATION_HEADER_FILES    
   src/stateestimation/GLWindow2.h 
@@ -85,6 +92,25 @@ set(STATEESTIMATION_HEADER_FILES
   src/stateestimation/PTAM/TrackerData.h
   src/stateestimation/PTAM/Tracker.h
   src/stateestimation/PTAM/VideoSource.h
+  src/stateestimation/PTAM/sparsestereo/calibrationresult.h
+  src/stateestimation/PTAM/sparsestereo/census.h
+  src/stateestimation/PTAM/sparsestereo/census-inl.h
+  src/stateestimation/PTAM/sparsestereo/censuswindow.h
+  src/stateestimation/PTAM/sparsestereo/CMakeLists.txt
+  src/stateestimation/PTAM/sparsestereo/exception.h
+  src/stateestimation/PTAM/sparsestereo/extendedfast.h
+  src/stateestimation/PTAM/sparsestereo/extendedfast-inl.h
+  src/stateestimation/PTAM/sparsestereo/fast9.h
+  src/stateestimation/PTAM/sparsestereo/fast9-inl.h
+  src/stateestimation/PTAM/sparsestereo/hammingdistance.h
+  src/stateestimation/PTAM/sparsestereo/imageconversion.h
+  src/stateestimation/PTAM/sparsestereo/simd.cpp
+  src/stateestimation/PTAM/sparsestereo/simd.h
+  src/stateestimation/PTAM/sparsestereo/sparsematch.h
+  src/stateestimation/PTAM/sparsestereo/sparserectification.h
+  src/stateestimation/PTAM/sparsestereo/sparsestereo.h
+  src/stateestimation/PTAM/sparsestereo/sparsestereo-inl.h
+  src/stateestimation/PTAM/sparsestereo/stereorectification.h
 )
 
 # set required libs and headers
@@ -117,6 +143,7 @@ set(AUTOPILOT_SOURCE_FILES
 	src/autopilot/KI/KILand.cpp
 	src/autopilot/KI/KIAutoInit.cpp
 	src/autopilot/KI/KIFlyTo.cpp
+	src/autopilot/KI/KIFlyToRelDir.cpp  # [Devesh]
 	src/autopilot/KI/KIFlyAlong.cpp		# [ziquan]
 	src/autopilot/KI/KISpin.cpp		# [ziquan]
 	src/autopilot/KI/KICircle.cpp		# [ziquan]
@@ -131,6 +158,7 @@ set(AUTOPILOT_HEADER_FILES
 	src/autopilot/KI/KILand.h
 	src/autopilot/KI/KIAutoInit.h
 	src/autopilot/KI/KIFlyTo.h
+	src/autopilot/KI/KIFlyToRelDir.h    # [Devesh]
 	src/autopilot/KI/KIFlyAlong.h		# [ziquan]
 	src/autopilot/KI/KISpin.h		# [ziquan]
 	src/autopilot/KI/KICircle.h		# [ziquan]

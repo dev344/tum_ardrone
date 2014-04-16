@@ -61,6 +61,9 @@ private:
 	std::string takeoff_channel;
 	std::string toggleState_channel;
 
+    // [Devesh] 
+	std::string interface_channel;  
+	ros::Publisher interface_directions_pub;
 
 	// command queue & KI stuff
 	std::deque<std::string> commandQueue;

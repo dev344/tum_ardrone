@@ -44,6 +44,11 @@
 #include "KI/KIRepsExe.h"	//[ziquan]
 #include "KI/KIProcedure.h"
 
+// [Devesh]
+#include <cmath>
+#define PI 3.14159265
+#include "KI/KIFlyToRelDir.h"
+
 
 using namespace std;
 
@@ -58,6 +63,9 @@ ControlNode::ControlNode()
     takeoff_channel = nh_.resolveName("ardrone/takeoff");
     land_channel = nh_.resolveName("ardrone/land");
     toggleState_channel = nh_.resolveName("ardrone/reset");
+
+    // [Devesh]
+    interface_channel = nh_.resolveName("interface_directions");
 
 	packagePath = ros::package::getPath("tum_ardrone");
 
@@ -86,6 +94,9 @@ ControlNode::ControlNode()
 	takeoff_pub	   = nh_.advertise<std_msgs::Empty>(takeoff_channel,1);
 	land_pub	   = nh_.advertise<std_msgs::Empty>(land_channel,1);
 	toggleState_pub	   = nh_.advertise<std_msgs::Empty>(toggleState_channel,1);
+
+    // [Devesh]
+	interface_directions_pub = nh_.advertise<std_msgs::String>(interface_channel, 50);
 
 	// internals
 	parameter_referenceZero = DronePosition(TooN::makeVector(0,0,0),0);
@@ -165,6 +176,9 @@ void ControlNode::popNextCommand(const tum_ardrone::filter_stateConstPtr statePt
 		int p;
 		char buf[100];
 		float parameters[10];
+
+        // [Devesh]
+        char snap_num;
 
 		//int pi;
 
@@ -270,6 +284,33 @@ void ControlNode::popNextCommand(const tum_ardrone::filter_stateConstPtr statePt
 
 		}
 
+        // [Devesh]
+		// gotoRelDir: When to want to go to a location relative to 
+        // a co-ordinate system aligned with your yaw angle. (i.e, when 
+        // straight ahead of drone is y-axis)
+		else if(sscanf(command.c_str(),"gotoRelDir %f %f %f %f",&parameters[0], &parameters[1], &parameters[2], &parameters[3]) == 4)
+		{
+            currentKI = new KIFlyToRelDir(
+                    DronePosition(
+                        // acos(yaw) - bsin(yaw), asin(yaw) + bcos(yaw)
+                        TooN::makeVector(parameters[0]*cos(-statePtr->yaw * PI / 180) - parameters[1]*sin(-statePtr->yaw * PI / 180), 
+                                         parameters[0]*sin(-statePtr->yaw * PI / 180) + parameters[1]*cos(-statePtr->yaw * PI / 180), 
+                                         parameters[2]) +
+                        parameter_referenceZero.pos,
+                        parameters[3] + parameter_referenceZero.yaw),
+                    parameter_StayTime,
+                    parameter_MaxControl,
+                    parameter_InitialReachDist,
+                    parameter_StayWithinDist
+                    );
+            currentKI->setPointers(this,&controller);
+            commandUnderstood = true;
+
+            std::cout << "checkpoint thingys are " << parameters[0]*cos(-statePtr->yaw * PI / 180) - parameters[1]*sin(-statePtr->yaw * PI / 180) 
+                << parameters[0]*sin(-statePtr->yaw * PI / 180) + parameters[1]*cos(-statePtr->yaw * PI / 180) << statePtr->yaw << endl;
+
+		}
+
 		// moveBy
 		else if(sscanf(command.c_str(),"moveBy %f %f %f %f",&parameters[0], &parameters[1], &parameters[2], &parameters[3]) == 4)
 		{
@@ -316,6 +357,15 @@ void ControlNode::popNextCommand(const tum_ardrone::filter_stateConstPtr statePt
 		else if(command == "lockScaleFP")
 		{
 			publishCommand("p lockScaleFP");
+			commandUnderstood = true;
+		}
+
+		else if(sscanf(command.c_str(),"snap %c", &snap_num) == 1)
+		{
+            std_msgs::String s;
+            s.data = "Snap ";
+            s.data += snap_num;
+            interface_directions_pub.publish(s);
 			commandUnderstood = true;
 		}
 

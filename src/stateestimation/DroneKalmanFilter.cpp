@@ -497,6 +497,7 @@ void DroneKalmanFilter::sync_xyz(double x_global, double y_global, double z_glob
 		y_offset = y.state[0] - y_global*xy_scale;
 		z_offset = z.state[0] - z_global*z_scale;
 		offsets_xyz_initialized = true;
+        std::cout << "syc hap" << std::endl;
 	}
 
 
@@ -523,6 +524,7 @@ void DroneKalmanFilter::updateScaleXYZ(TooN::Vector<3> ptamDiff, TooN::Vector<3>
 	ScaleStruct s = ScaleStruct(ptamDiff, imuDiff);
 
 	// dont add samples that are way to small...
+    // [Devesh] do something here?
 	if(s.imuNorm < 0.05 || s.ptamNorm < 0.05) return;
 
 
@@ -602,6 +604,7 @@ void DroneKalmanFilter::updateScaleXYZ(TooN::Vector<3> ptamDiff, TooN::Vector<3>
 	scalePairsIn = numIn;
 	scalePairsOut = numOut;
 
+    std::cerr << "sc upd" << std::endl;
 	printf("scale: in: %i; out: %i, filt: %.3f; xyz: %.1f < %.1f < %.1f; xy: %.1f < %.1f < %.1f; z: %.1f < %.1f < %.1f;\n", 
 		numIn, numOut, scale_Filtered, 
 		scale_PTAMSmallVar, scale_Unfiltered, scale_IMUSmallVar,
@@ -815,6 +818,7 @@ TooN::Vector<6> DroneKalmanFilter::transformPTAMObservation(TooN::Vector<6> obs)
 
 	return obs;
 }
+
 TooN::Vector<6> DroneKalmanFilter::backTransformPTAMObservation(TooN::Vector<6> obs)
 {
 	obs[3] -= roll_offset;
@@ -822,6 +826,14 @@ TooN::Vector<6> DroneKalmanFilter::backTransformPTAMObservation(TooN::Vector<6> 
 	obs[5] -= yaw_offset;
 
 	double yawRad = obs[5] * 3.14159268 / 180;
+    std::cerr  << "back " << yaw_offset << " " << 
+                            x_offset << " " <<
+                            y_offset << " " <<
+                            z_offset << " " <<
+                            yawRad << " " <<
+                            xy_scale << " " <<
+                            z_scale << " " <<
+                            std::endl;
 	obs[0] = (- x_offset + obs[0] + 0.2*sin(yawRad))/xy_scale;
 	obs[1] = (- y_offset + obs[1] + 0.2*cos(yawRad))/xy_scale;
 	obs[2] = (- z_offset + obs[2])/z_scale;
