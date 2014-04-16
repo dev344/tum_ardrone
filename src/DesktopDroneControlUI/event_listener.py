@@ -62,7 +62,7 @@ class EventListener(DroneVideoDisplay):
         self.z_velocity = 0
         self.publisher = rospy.Publisher('drone_ctrl_directions', String)
         self.tum_ardrone_pub = rospy.Publisher('tum_ardrone/com', String)
-        rospy.Subscriber("interface_directions", String, self.callback)
+        rospy.Subscriber("meneldor/ui_com", String, self.callback)
         rospy.Subscriber("ptam/mappoints", String, self.handle_mappoints)
         rospy.Subscriber("tum_ardrone/scale", String, self.scale_callback)
         self.createButtons()
@@ -597,7 +597,7 @@ class EventListener(DroneVideoDisplay):
     def scale_callback(self, data):
         self.scale_rcv_count += 1
         scale_new = float(data.data.split()[1])
-        if self.scale_rcv_count < 10:
+        if self.scale_rcv_count < 100:
             self.scale = scale_new
         print 'scale', scale_new
 

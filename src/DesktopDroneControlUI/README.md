@@ -1,4 +1,4 @@
-semi_autonomous_drone
-=====================
+Meneldor Desktop Interface
+==========================
 
 

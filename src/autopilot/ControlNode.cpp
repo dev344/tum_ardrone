@@ -93,7 +93,7 @@ ControlNode::ControlNode()
 	toggleState_pub	   = nh_.advertise<std_msgs::Empty>(toggleState_channel,1);
 
     // [Devesh]
-    interface_channel = nh_.resolveName("interface_directions");
+    interface_channel = nh_.resolveName("meneldor/ui_com");
 	interface_directions_pub = nh_.advertise<std_msgs::String>(interface_channel, 50);
 
 	// internals

@@ -47,7 +47,7 @@ class Controller():
         # rospy.Subscriber("ptam/mappoints", String, self.handle_mappoints)
 
         self.publisher = rospy.Publisher('cmd_vel', Twist)
-        self.publisher2 = rospy.Publisher('interface_directions', String)
+        self.publisher2 = rospy.Publisher('meneldor/ui_com', String)
         self.tum_ardrone_pub = rospy.Publisher('tum_ardrone/com', String)
 
         self.radi = 0
