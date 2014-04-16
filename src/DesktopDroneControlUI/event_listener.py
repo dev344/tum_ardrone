@@ -43,6 +43,7 @@ class KeyMapping(object):
 # Our controller definition, note that we extend the DroneVideoDisplay class
 class EventListener(DroneVideoDisplay):
     # Gestures
+    NONE        = -1
     CIRCLE      = 0
     L_TO_R_SEMI = 1
     R_TO_L_SEMI = 2
@@ -66,12 +67,14 @@ class EventListener(DroneVideoDisplay):
         rospy.Subscriber("ptam/mappoints", String, self.handle_mappoints)
         rospy.Subscriber("tum_ardrone/scale", String, self.scale_callback)
         self.createButtons()
-        self.gesture = -1
+        self.gesture = self.NONE
         self.bridge = CvBridge()
         self.toggle = 0
 
         self.scale_rcv_count = 0
         self.scale = 1.0
+
+        self.location_history = dict()
 
 # We add a keyboard handler to the DroneVideoDisplay to react to keypresses
     def keyPressEvent(self, event):
@@ -410,18 +413,25 @@ class EventListener(DroneVideoDisplay):
                             ]
                 """
 
+                self.location_history = dict()
                 heights = [0.5, 0, -0.5]
                 commands = ['clearCommands', 'lockScaleFP', 'setLineSpeed 0.1', 'setReference $POSE$']
                 for i in xrange(3):
                     commands.append('setStayTime 3')
                     commands.append('gotoRelDir ' + str(breakpoints[0]) + ' 0 ' + str(heights[i]) + ' 0')
                     commands.append('snap ' + str(2*i))
+
+                    self.location_history[2*i] = 'gotoRelDir ' + str(breakpoints[0]) + ' 0 ' + str(heights[i]) + ' 0'
+
                     commands.append('setStayTime 1')
                     for breakpoint in breakpoints[1:]:
                         commands.append('gotoRelDir ' + str(breakpoint) + ' 0 ' + str(heights[i]) + ' 0')
                     commands.append('setStayTime 3')
                     commands.append('gotoRelDir ' + str(-breakpoints[0]) + ' 0 ' + str(heights[i]) + ' 0')
                     commands.append('snap ' + str(2*i+1))
+
+                    self.location_history[2*i+1] = 'gotoRelDir ' + str(-breakpoints[0]) + ' 0 ' + str(heights[i]) + ' 0'
+
                 commands.append('goto 0 0 0 0')
                 commands.append('land')
                 commands.append('start')
@@ -466,9 +476,16 @@ class EventListener(DroneVideoDisplay):
         
         if clear_pane:
             if self.centralWidget.clickedLabel != -1:
+                if self.gesture == self.ZIGZAG:
+                    commands = ['clearCommands']
+                    commands.append(self.location_history[self.centralWidget.clickedLabel])
+                    commands.append('start')
+                    for command in commands:
+                        self.tum_ardrone_pub.publish(String("c " + command))
+                else:
+                    self.publisher.publish(String("Repeat " + \
+                        str(self.centralWidget.clickedLabel)))
                 print "label selected", self.centralWidget.clickedLabel
-                self.publisher.publish(String("Repeat " + \
-                    str(self.centralWidget.clickedLabel)))
                 self.centralWidget.clickedLabel = -1
 
     def mouseDoubleClickEvent(self, event):
