@@ -64,9 +64,6 @@ ControlNode::ControlNode()
     land_channel = nh_.resolveName("ardrone/land");
     toggleState_channel = nh_.resolveName("ardrone/reset");
 
-    // [Devesh]
-    interface_channel = nh_.resolveName("interface_directions");
-
 	packagePath = ros::package::getPath("tum_ardrone");
 
 	std::string val;
@@ -96,6 +93,7 @@ ControlNode::ControlNode()
 	toggleState_pub	   = nh_.advertise<std_msgs::Empty>(toggleState_channel,1);
 
     // [Devesh]
+    interface_channel = nh_.resolveName("interface_directions");
 	interface_directions_pub = nh_.advertise<std_msgs::String>(interface_channel, 50);
 
 	// internals
