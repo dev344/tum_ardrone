@@ -18,3 +18,4 @@ bag/
 video/
 *~
 *.swp
+*.pyc
