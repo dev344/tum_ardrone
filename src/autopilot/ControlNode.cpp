@@ -42,6 +42,7 @@
 #include "KI/KIModel.h"		//[ziquan]
 #include "KI/KIRepsExe.h"	//[ziquan]
 #include "KI/KIRecover.h"	//[ziquan]
+#include "KI/KIZigZagBoard.h"	//[ziquan]
 #include "KI/KIProcedure.h"
 
 using namespace std;
@@ -278,7 +279,7 @@ void ControlNode::popNextCommand(
 
 		int p;
 		char buf[100];
-		float parameters[10];
+		float parameters[12];
 
 //int pi;
 
@@ -641,6 +642,26 @@ void ControlNode::popNextCommand(
 			currentKI->setPointers(this, &controller);
 			commandUnderstood = true;
 			currentKIString = command;
+		}
+
+		else if (sscanf(command.c_str(),
+				"zigzagboard %f %f %f %f %f %f %f %f %f %f %f %f",
+				&parameters[0], &parameters[1], &parameters[2], &parameters[3],
+				&parameters[4], &parameters[5], &parameters[6], &parameters[7],
+				&parameters[8], &parameters[9], &parameters[10],
+				&parameters[11]) == 12) {
+			currentKI = new KIZigZagBoard(
+					TooN::makeVector(parameters[0], parameters[1],
+							parameters[2]),
+					TooN::makeVector(parameters[3], parameters[4],
+							parameters[5]),
+					TooN::makeVector(parameters[6], parameters[7],
+							parameters[8]),
+					TooN::makeVector(parameters[9], parameters[10],
+							parameters[11]), 2, 92.0 * 16 / sqrt(16 * 16 + 9 * 9),
+					92.0 * 9 / sqrt(16 * 16 + 9 * 9));
+			currentKI->setPointers(this, &controller);
+			commandUnderstood = true;
 		}
 		if (!commandUnderstood)
 			ROS_INFO("unknown command, skipping!");

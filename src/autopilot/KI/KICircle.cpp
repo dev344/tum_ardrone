@@ -47,10 +47,10 @@ bool KICircle::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 	TooN::Vector<3> diffVector = currentPoint - centerPoint;
 
 	// get dirVector
-	TooN::Vector<3> dirVector = unifyVector(diffVector ^ upVector);	// vector of direction = diff x up
+	TooN::Vector<3> dirVector = TooN::unit(diffVector ^ upVector);// vector of direction = diff x up
 
 	// get radiusVector
-	TooN::Vector<3> radiusVector = unifyVector(upVector ^ dirVector);// vector away from centre = up x direction
+	TooN::Vector<3> radiusVector = TooN::unit(upVector ^ dirVector);// vector away from centre = up x direction
 	radiusVector *= radius;
 
 	// compute target position
@@ -61,13 +61,12 @@ bool KICircle::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 				sqrt(diffVector * diffVector));
 	} else {
 		// arccos ( -diff_xy . (0,1) / |-diff_xy| * |(0,1)| )
-		checkPosition.yaw = 180.0 / 3.1416
+		checkPosition.yaw = 180.0 / M_PI
 				* acos(
 						-diffVector[1]
 								/ sqrt(
-										diffVector[0] * diffVector[0]
-												+ diffVector[1]
-														* diffVector[1]));
+										diffVector.slice<0, 2>()
+												* diffVector.slice<0, 2>()));
 
 		// check x value in diff to determine sign
 		if (diffVector[0] > 0) {

@@ -12,7 +12,7 @@ KIFlyAlong::KIFlyAlong(DronePosition startPositionP,
 {
 	startPosition = startPositionP;
 	checkpoint = startPositionP.pos;
-	direction = unifyVector(directionP);
+	direction = TooN::unit(directionP);
 	lineSpeed = lineSpeedP;
 	distance = distanceP;
 	directionSet = false;
