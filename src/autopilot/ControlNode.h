@@ -132,6 +132,6 @@ public:
 	// trajectory
 	std::string currentKIString;
 	int trajectoryMaxSize;
-	std::deque<DronePosition> trajectory;
+    std::deque<DronePosition> trajectory;
 };
 #endif /* __CONTROLNODE_H */
