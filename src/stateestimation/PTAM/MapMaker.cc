@@ -8,334 +8,6 @@ using namespace std;
 
 #include <map>
 
-      /**************************
-#include <ctype.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <opencv2/core/core.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/calib3d/calib3d.hpp>
-#include <opencv2/features2d/features2d.hpp>
-#include <opencv2/highgui/highgui.hpp>
-
-using namespace cv;
-
-static bool readCameraMatrix(const string& filename,
-                             Mat& cameraMatrix, Mat& distCoeffs,
-                             Size& calibratedImageSize )
-{
-    FileStorage fs(filename, FileStorage::READ);
-    fs["image_width"] >> calibratedImageSize.width;
-    fs["image_height"] >> calibratedImageSize.height;
-    fs["distortion_coefficients"] >> distCoeffs;
-    fs["camera_matrix"] >> cameraMatrix;
-    
-    if( distCoeffs.type() != CV_64F )
-        distCoeffs = Mat_<double>(distCoeffs);
-    if( cameraMatrix.type() != CV_64F )
-        cameraMatrix = Mat_<double>(cameraMatrix);
-    
-    return true;
-}
-
-static bool readModelViews( const string& filename, vector<Point3f>& box,
-                           vector<string>& imagelist,
-                           vector<Rect>& roiList, vector<Vec6f>& poseList )
-{
-    imagelist.resize(0);
-    roiList.resize(0);
-    poseList.resize(0);
-    box.resize(0);
-    
-    FileStorage fs(filename, FileStorage::READ);
-    if( !fs.isOpened() )
-        return false;
-    fs["box"] >> box;
-    
-    FileNode all = fs["views"];
-    if( all.type() != FileNode::SEQ )
-        return false;
-    FileNodeIterator it = all.begin(), it_end = all.end();
-    
-    for(; it != it_end; ++it)
-    {
-        FileNode n = *it;
-        imagelist.push_back((string)n["image"]);
-        FileNode nr = n["roi"];
-        roiList.push_back(Rect((int)nr[0], (int)nr[1], (int)nr[2], (int)nr[3]));
-        FileNode np = n["pose"];
-        poseList.push_back(Vec6f((float)np[0], (float)np[1], (float)np[2],
-                                 (float)np[3], (float)np[4], (float)np[5]));
-    }
-    
-    return true;
-}
-
-
-struct PointModel
-{
-    vector<Point3f> points;
-    vector<vector<int> > didx;
-    Mat descriptors;
-    string name;
-};
-
-
-static void writeModel(const string& modelFileName, const string& modelname,
-                       const PointModel& model)
-{
-    FileStorage fs(modelFileName, FileStorage::WRITE);
-    
-    fs << modelname << "{" <<
-        "points" << "[:" << model.points << "]" <<
-        "idx" << "[:";
-    
-    for( size_t i = 0; i < model.didx.size(); i++ )
-        fs << "[:" << model.didx[i] << "]";
-    fs << "]" << "descriptors" << model.descriptors;
-}
-
-
-static void unpackPose(const Vec6f& pose, Mat& R, Mat& t)
-{
-    Mat rvec = (Mat_<double>(3,1) << pose[0], pose[1], pose[2]);
-    t = (Mat_<double>(3,1) << pose[3], pose[4], pose[5]);
-    Rodrigues(rvec, R);
-}
-
-
-static Mat getFundamentalMat( const Mat& R1, const Mat& t1,
-                              const Mat& R2, const Mat& t2,
-                              const Mat& cameraMatrix )
-{
-    Mat_<double> R = R2*R1.t(), t = t2 - R*t1;
-    double tx = t.at<double>(0,0), ty = t.at<double>(1,0), tz = t.at<double>(2,0);
-    Mat E = (Mat_<double>(3,3) << 0, -tz, ty, tz, 0, -tx, -ty, tx, 0)*R;
-    Mat iK = cameraMatrix.inv();
-    Mat F = iK.t()*E*iK;
-
-#if 0
-    static bool checked = false;
-    if(!checked)
-    {
-        vector<Point3f> objpoints(100);
-        Mat O(objpoints);
-        randu(O, Scalar::all(-10), Scalar::all(10));
-        vector<Point2f> imgpoints1, imgpoints2;
-        projectPoints(Mat(objpoints), R1, t1, cameraMatrix, Mat(), imgpoints1);
-        projectPoints(Mat(objpoints), R2, t2, cameraMatrix, Mat(), imgpoints2);
-        double* f = (double*)F.data;
-        for( size_t i = 0; i < objpoints.size(); i++ )
-        {
-            Point2f p1 = imgpoints1[i], p2 = imgpoints2[i];
-            double diff = p2.x*(f[0]*p1.x + f[1]*p1.y + f[2]) +
-                 p2.y*(f[3]*p1.x + f[4]*p1.y + f[5]) +
-                f[6]*p1.x + f[7]*p1.y + f[8];
-            CV_Assert(fabs(diff) < 1e-3);
-        }
-        checked = true;
-    }
-#endif
-    return F;
-}
-
-
-static void findConstrainedCorrespondences(const Mat& _F,
-                const vector<KeyPoint>& keypoints1,
-                const vector<KeyPoint>& keypoints2,
-                const Mat& descriptors1,
-                const Mat& descriptors2,
-                vector<Vec2i>& matches,
-                double eps, double ratio)
-{
-    float F[9]={0};
-    int dsize = descriptors1.cols;
-    
-    Mat Fhdr = Mat(3, 3, CV_32F, F);
-    _F.convertTo(Fhdr, CV_32F);
-    matches.clear();
-    
-    for( size_t i = 0; i < keypoints1.size(); i++ )
-    {
-        Point2f p1 = keypoints1[i].pt;
-        double bestDist1 = DBL_MAX, bestDist2 = DBL_MAX;
-        int bestIdx1 = -1, bestIdx2 = -1;
-        const float* d1 = descriptors1.ptr<float>(i);
-        
-        for( size_t j = 0; j < keypoints2.size(); j++ )
-        {
-            Point2f p2 = keypoints2[j].pt;
-            double e = p2.x*(F[0]*p1.x + F[1]*p1.y + F[2]) +
-                       p2.y*(F[3]*p1.x + F[4]*p1.y + F[5]) +
-                       F[6]*p1.x + F[7]*p1.y + F[8];
-            if( fabs(e) > eps )
-                continue;
-            const float* d2 = descriptors2.ptr<float>(j);
-            double dist = 0;
-            int k = 0;
-            
-            for( ; k <= dsize - 8; k += 8 )
-            {
-                float t0 = d1[k] - d2[k], t1 = d1[k+1] - d2[k+1];
-                float t2 = d1[k+2] - d2[k+2], t3 = d1[k+3] - d2[k+3];
-                float t4 = d1[k+4] - d2[k+4], t5 = d1[k+5] - d2[k+5];
-                float t6 = d1[k+6] - d2[k+6], t7 = d1[k+7] - d2[k+7];
-                dist += t0*t0 + t1*t1 + t2*t2 + t3*t3 +
-                        t4*t4 + t5*t5 + t6*t6 + t7*t7;
-                
-                if( dist >= bestDist2 )
-                    break;
-            }
-            
-            if( dist < bestDist2 )
-            {
-                for( ; k < dsize; k++ )
-                {
-                    float t = d1[k] - d2[k];
-                    dist += t*t;
-                }
-                
-                if( dist < bestDist1 )
-                {
-                    bestDist2 = bestDist1;
-                    bestIdx2 = bestIdx1;
-                    bestDist1 = dist;
-                    bestIdx1 = (int)j;
-                }
-                else if( dist < bestDist2 )
-                {
-                    bestDist2 = dist;
-                    bestIdx2 = (int)j;
-                }
-            }
-        }
-        
-        if( bestIdx1 >= 0 && bestDist1 < bestDist2*ratio )
-        {
-            Point2f p2 = keypoints1[bestIdx1].pt;
-            double e = p2.x*(F[0]*p1.x + F[1]*p1.y + F[2]) +
-                        p2.y*(F[3]*p1.x + F[4]*p1.y + F[5]) +
-                        F[6]*p1.x + F[7]*p1.y + F[8];
-            if( e > eps*0.25 )
-                continue;
-            double threshold = bestDist1/ratio;
-            const float* d22 = descriptors2.ptr<float>(bestIdx1);
-            size_t i1 = 0;
-            for( ; i1 < keypoints1.size(); i1++ )
-            {
-                if( i1 == i )
-                    continue;
-                Point2f p1 = keypoints1[i1].pt;
-                const float* d11 = descriptors1.ptr<float>(i1);
-                double dist = 0;
-                
-                e = p2.x*(F[0]*p1.x + F[1]*p1.y + F[2]) +
-                    p2.y*(F[3]*p1.x + F[4]*p1.y + F[5]) +
-                    F[6]*p1.x + F[7]*p1.y + F[8];
-                if( fabs(e) > eps )
-                    continue;
-                
-                for( int k = 0; k < dsize; k++ )
-                {
-                    float t = d11[k] - d22[k];
-                    dist += t*t;
-                    if( dist >= threshold )
-                        break;
-                }
-                
-                if( dist < threshold )
-                    break;
-            }
-            if( i1 == keypoints1.size() )
-                matches.push_back(Vec2i(i,bestIdx1));
-        }
-    }
-}
-
-
-static Point3f findRayIntersection(Point3f k1, Point3f b1, Point3f k2, Point3f b2)
-{    
-    float a[4], b[2], x[2];
-    a[0] = k1.dot(k1);
-    a[1] = a[2] = -k1.dot(k2);
-    a[3] = k2.dot(k2);
-    b[0] = k1.dot(b2 - b1);
-    b[1] = k2.dot(b1 - b2);
-    Mat_<float> A(2, 2, a), B(2, 1, b), X(2, 1, x);
-    solve(A, B, X);
-    
-    float s1 = X.at<float>(0, 0);
-    float s2 = X.at<float>(1, 0);
-    return (k1*s1 + b1 + k2*s2 + b2)*0.5f;
-}
-
-
-static Point3f triangulatePoint(const vector<Point2f>& ps,
-                                const vector<Mat>& Rs,
-                                const vector<Mat>& ts,
-                                const Mat& cameraMatrix)
-{
-    Mat_<double> K(cameraMatrix);
-    
-    // cerr << "E T" << endl;
-    if( ps.size() > 2 )
-    {
-        // cerr << "E If" << endl;
-        Mat_<double> L(ps.size()*3, 4), U, evalues;
-        Mat_<double> P(3,4), Rt(3,4), Rt_part1=Rt.colRange(0,3), Rt_part2=Rt.colRange(3,4);
-        
-        for( size_t i = 0; i < ps.size(); i++ )
-        {
-            double x = ps[i].x, y = ps[i].y;
-            Rs[i].convertTo(Rt_part1, Rt_part1.type());
-            ts[i].convertTo(Rt_part2, Rt_part2.type());
-            P = K*Rt;
-            
-            for( int k = 0; k < 4; k++ )
-            {
-                L(i*3, k) = x*P(2,k) - P(0,k);
-                L(i*3+1, k) = y*P(2,k) - P(1,k);
-                L(i*3+2, k) = x*P(1,k) - y*P(0,k);
-            }
-        }
-        
-        eigen(L.t()*L, evalues, U);
-        // cerr << "Ex For" << endl;
-        CV_Assert(evalues(0,0) >= evalues(3,0));
-        
-        double W = fabs(U(3,3)) > FLT_EPSILON ? 1./U(3,3) : 0;
-        return Point3f((float)(U(3,0)*W), (float)(U(3,1)*W), (float)(U(3,2)*W));
-    }
-    else
-    {
-        // cerr << "E Else" << endl;
-        Mat_<float> iK = K.inv();
-        Mat_<float> R1t = Mat_<float>(Rs[0]).t();
-        Mat_<float> R2t = Mat_<float>(Rs[1]).t();
-        Mat_<float> m1 = (Mat_<float>(3,1) << ps[0].x, ps[0].y, 1);
-        Mat_<float> m2 = (Mat_<float>(3,1) << ps[1].x, ps[1].y, 1);
-        Mat_<float> K1 = R1t*(iK*m1), K2 = R2t*(iK*m2);
-        // cerr << "half done" << endl;
-        // cerr << "R1 size " << R1t.rows << R1t.cols << endl;
-        // cerr << "Ti size " << ts[0].rows << ts[0].cols << endl;
-        Mat_<float> B1 = -R1t*Mat_<float>(ts[0]);
-        // cerr << "three quarters done" << endl;
-        // cerr << "R2 size " << R2t.rows << R2t.cols << endl;
-        // cerr << "Ti2 size " << ts[1].rows << ts[1].cols << endl;
-        Mat_<float> B2;
-        try { 
-            B2 = -R2t*Mat_<float>(ts[1]);
-        }
-        catch (cv::Exception const & e) { std::cerr<<"OpenCV exception: "<<e.what()<<std::endl; } 
-        // cerr << "full done" << endl;
-        // cerr << "R1 size " << R1t.rows << R1t.cols << endl;
-        return findRayIntersection(*K1.ptr<Point3f>(), *B1.ptr<Point3f>(),
-                                   *K2.ptr<Point3f>(), *B2.ptr<Point3f>());
-    }
-}
-
-       **************************/
-
 // Copyright 2008 Isis Innovation Limited
 
 #include <cvd/vector_image_ref.h>
@@ -362,31 +34,33 @@ using namespace GVars3;
 
 // Constructor sets up internal reference variable to Map.
 // Most of the intialisation is done by Reset()..
-MapMaker::MapMaker(Map& m, const ATANCamera &cam)
-  : mMap(m), mCamera(cam)
+MapMaker::MapMaker(Map& m, const ATANCamera &cam) :
+        mMap(m), mCamera(cam)
 {
-  mbResetRequested = false;
-  Reset();
-  start(); // This CVD::thread func starts the map-maker thread with function run()
-  GUI.RegisterCommand("SaveMap", GUICommandCallBack, this);
-  GV3::Register(mgvdWiggleScale, "MapMaker.WiggleScale", 0.1, SILENT); // Default to 10cm between keyframes
-  chatter_pub = n.advertise<std_msgs::String>("chatter", 5000);
-};
+    mbResetRequested = false;
+    Reset();
+    start(); // This CVD::thread func starts the map-maker thread with function run()
+    GUI.RegisterCommand("SaveMap", GUICommandCallBack, this);
+    GV3::Register(mgvdWiggleScale, "MapMaker.WiggleScale", 0.1, SILENT); // Default to 10cm between keyframes
+    chatter_pub = n.advertise < std_msgs::String > ("chatter", 5000);
+}
+;
 
 void MapMaker::Reset()
 {
-  // This is only called from within the mapmaker thread...
-  mMap.Reset();
-  mvFailureQueue.clear();
-  while(!mqNewQueue.empty()) mqNewQueue.pop();
-  mMap.vpKeyFrames.clear(); // TODO: actually erase old keyframes
-  mvpKeyFrameQueue.clear(); // TODO: actually erase old keyframes
-  mbBundleRunning = false;
-  mbBundleConverged_Full = true;
-  mbBundleConverged_Recent = true;
-  mbResetDone = true;
-  mbResetRequested = false;
-  mbBundleAbortRequested = false;
+    // This is only called from within the mapmaker thread...
+    mMap.Reset();
+    mvFailureQueue.clear();
+    while (!mqNewQueue.empty())
+        mqNewQueue.pop();
+    mMap.vpKeyFrames.clear(); // TODO: actually erase old keyframes
+    mvpKeyFrameQueue.clear(); // TODO: actually erase old keyframes
+    mbBundleRunning = false;
+    mbBundleConverged_Full = true;
+    mbBundleConverged_Recent = true;
+    mbResetDone = true;
+    mbResetRequested = false;
+    mbBundleAbortRequested = false;
 }
 
 // CHECK_RESET is a handy macro which makes the mapmaker thread stop
@@ -397,420 +71,435 @@ void MapMaker::run()
 {
 
 #ifdef WIN32
-  // For some reason, I get tracker thread starvation on Win32 when
-  // adding key-frames. Perhaps this will help:
-  SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_LOWEST);
+    // For some reason, I get tracker thread starvation on Win32 when
+    // adding key-frames. Perhaps this will help:
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_LOWEST);
 #endif
 
-  while(!shouldStop())  // ShouldStop is a CVD::Thread func which return true if the thread is told to exit.
+    while (!shouldStop()) // ShouldStop is a CVD::Thread func which return true if the thread is told to exit.
     {
-      CHECK_RESET;
-      sleep(5); // Sleep not really necessary, especially if mapmaker is busy
-      CHECK_RESET;
-      
-      // Handle any GUI commands encountered..
-      while(!mvQueuedCommands.empty())
-	{
-	  GUICommandHandler(mvQueuedCommands.begin()->sCommand, mvQueuedCommands.begin()->sParams);
-	  mvQueuedCommands.erase(mvQueuedCommands.begin());
-	}
-      
-      if(!mMap.IsGood())  // Nothing to do if there is no map yet!
-	continue;
-      
-      // From here on, mapmaker does various map-maintenance jobs in a certain priority
-      // Hierarchy. For example, if there's a new key-frame to be added (QueueSize() is >0)
-      // then that takes high priority.
-      
-      CHECK_RESET;
-      // Should we run local bundle adjustment?
-      if(!mbBundleConverged_Recent && QueueSize() == 0)  
-	BundleAdjustRecent();   
-      
-      CHECK_RESET;
-      // Are there any newly-made map points which need more measurements from older key-frames?
-      if(mbBundleConverged_Recent && QueueSize() == 0)
-	ReFindNewlyMade();  
-      
-      CHECK_RESET;
-      // Run global bundle adjustment?
-      if(mbBundleConverged_Recent && !mbBundleConverged_Full && QueueSize() == 0)
-	BundleAdjustAll();
-      
-      CHECK_RESET;
-      // Very low priorty: re-find measurements marked as outliers
-      if(mbBundleConverged_Recent && mbBundleConverged_Full && rand()%20 == 0 && QueueSize() == 0)
-	ReFindFromFailureQueue();
-      
-      CHECK_RESET;
-      HandleBadPoints();
-      
-      CHECK_RESET;
-      // Any new key-frames to be added?
-      if(QueueSize() > 0)
-	AddKeyFrameFromTopOfQueue(); // Integrate into map data struct, and process
+        CHECK_RESET;
+        sleep(5); // Sleep not really necessary, especially if mapmaker is busy
+        CHECK_RESET;
+
+        // Handle any GUI commands encountered..
+        while (!mvQueuedCommands.empty())
+        {
+            GUICommandHandler(mvQueuedCommands.begin()->sCommand,
+                    mvQueuedCommands.begin()->sParams);
+            mvQueuedCommands.erase(mvQueuedCommands.begin());
+        }
+
+        if (!mMap.IsGood()) // Nothing to do if there is no map yet!
+            continue;
+
+        // From here on, mapmaker does various map-maintenance jobs in a certain priority
+        // Hierarchy. For example, if there's a new key-frame to be added (QueueSize() is >0)
+        // then that takes high priority.
+
+        CHECK_RESET;
+        // Should we run local bundle adjustment?
+        if (!mbBundleConverged_Recent && QueueSize() == 0)
+            BundleAdjustRecent();
+
+        CHECK_RESET;
+        // Are there any newly-made map points which need more measurements from older key-frames?
+        if (mbBundleConverged_Recent && QueueSize() == 0)
+            ReFindNewlyMade();
+
+        CHECK_RESET;
+        // Run global bundle adjustment?
+        if (mbBundleConverged_Recent && !mbBundleConverged_Full
+                && QueueSize() == 0)
+            BundleAdjustAll();
+
+        CHECK_RESET;
+        // Very low priorty: re-find measurements marked as outliers
+        if (mbBundleConverged_Recent && mbBundleConverged_Full
+                && rand() % 20 == 0 && QueueSize() == 0)
+            ReFindFromFailureQueue();
+
+        CHECK_RESET;
+        HandleBadPoints();
+
+        CHECK_RESET;
+        // Any new key-frames to be added?
+        if (QueueSize() > 0)
+            AddKeyFrameFromTopOfQueue(); // Integrate into map data struct, and process
     }
 }
-
 
 // Tracker calls this to demand a reset
 void MapMaker::RequestReset()
 {
-  mbResetDone = false;
-  mbResetRequested = true;
+    mbResetDone = false;
+    mbResetRequested = true;
 }
 
 bool MapMaker::ResetDone()
 {
-  return mbResetDone;
+    return mbResetDone;
 }
 
 // HandleBadPoints() Does some heuristic checks on all points in the map to see if 
 // they should be flagged as bad, based on tracker feedback.
 void MapMaker::HandleBadPoints()
 {
-  // Did the tracker see this point as an outlier more often than as an inlier?
-  for(unsigned int i=0; i<mMap.vpPoints.size(); i++)
+    // Did the tracker see this point as an outlier more often than as an inlier?
+    for (unsigned int i = 0; i < mMap.vpPoints.size(); i++)
     {
-      MapPoint &p = *mMap.vpPoints[i];
-      if(p.nMEstimatorOutlierCount > 20 && p.nMEstimatorOutlierCount > p.nMEstimatorInlierCount)
-	p.bBad = true;
+        MapPoint &p = *mMap.vpPoints[i];
+        if (p.nMEstimatorOutlierCount > 20
+                && p.nMEstimatorOutlierCount > p.nMEstimatorInlierCount)
+            p.bBad = true;
     }
-  
-  // All points marked as bad will be erased - erase all records of them
-  // from keyframes in which they might have been measured.
-  for(unsigned int i=0; i<mMap.vpPoints.size(); i++)
-    if(mMap.vpPoints[i]->bBad)
-      {
-	MapPoint *p = mMap.vpPoints[i];
-	for(unsigned int j=0; j<mMap.vpKeyFrames.size(); j++)
-	  {
-	    KeyFrame &k = *mMap.vpKeyFrames[j];
-	    if(k.mMeasurements.count(p))
-	      k.mMeasurements.erase(p);
-	  }
-      }
-  // Move bad points to the trash list.
-  mMap.MoveBadPointsToTrash();
+
+    // All points marked as bad will be erased - erase all records of them
+    // from keyframes in which they might have been measured.
+    for (unsigned int i = 0; i < mMap.vpPoints.size(); i++)
+        if (mMap.vpPoints[i]->bBad)
+        {
+            MapPoint *p = mMap.vpPoints[i];
+            for (unsigned int j = 0; j < mMap.vpKeyFrames.size(); j++)
+            {
+                KeyFrame &k = *mMap.vpKeyFrames[j];
+                if (k.mMeasurements.count(p))
+                    k.mMeasurements.erase(p);
+            }
+        }
+    // Move bad points to the trash list.
+    mMap.MoveBadPointsToTrash();
 }
 
 MapMaker::~MapMaker()
 {
-  mbBundleAbortRequested = true;
-  stop(); // makes shouldStop() return true
-  cout << "Waiting for mapmaker to die.." << endl;
-  join();
-  cout << " .. mapmaker has died." << endl;
+    mbBundleAbortRequested = true;
+    stop(); // makes shouldStop() return true
+    cout << "Waiting for mapmaker to die.." << endl;
+    join();
+    cout << " .. mapmaker has died." << endl;
 }
-
 
 // Finds 3d coords of point in reference frame B from two z=1 plane projections
-TooN::Vector<3> MapMaker::ReprojectPoint(SE3<> se3AfromB, const TooN::Vector<2> &v2A, const TooN::Vector<2> &v2B)
+TooN::Vector<3> MapMaker::ReprojectPoint(SE3<> se3AfromB,
+        const TooN::Vector<2> &v2A, const TooN::Vector<2> &v2B)
 {
-  Matrix<3,4> PDash;
-  PDash.slice<0,0,3,3>() = se3AfromB.get_rotation().get_matrix();
-  PDash.slice<0,3,3,1>() = se3AfromB.get_translation().as_col();
-  
-  Matrix<4> A;
-  A[0][0] = -1.0; A[0][1] =  0.0; A[0][2] = v2B[0]; A[0][3] = 0.0;
-  A[1][0] =  0.0; A[1][1] = -1.0; A[1][2] = v2B[1]; A[1][3] = 0.0;
-  A[2] = v2A[0] * PDash[2] - PDash[0];
-  A[3] = v2A[1] * PDash[2] - PDash[1];
+    Matrix<3, 4> PDash;
+    PDash.slice<0, 0, 3, 3>() = se3AfromB.get_rotation().get_matrix();
+    PDash.slice<0, 3, 3, 1>() = se3AfromB.get_translation().as_col();
 
-  TooN::SVD<4,4> svd(A);
-  TooN::Vector<4> v4Smallest = svd.get_VT()[3];
-  if(v4Smallest[3] == 0.0)
-    v4Smallest[3] = 0.00001;
-  return project(v4Smallest);
+    Matrix<4> A;
+    A[0][0] = -1.0;
+    A[0][1] = 0.0;
+    A[0][2] = v2B[0];
+    A[0][3] = 0.0;
+    A[1][0] = 0.0;
+    A[1][1] = -1.0;
+    A[1][2] = v2B[1];
+    A[1][3] = 0.0;
+    A[2] = v2A[0] * PDash[2] - PDash[0];
+    A[3] = v2A[1] * PDash[2] - PDash[1];
+
+    TooN::SVD<4, 4> svd(A);
+    TooN::Vector<4> v4Smallest = svd.get_VT()[3];
+    if (v4Smallest[3] == 0.0)
+        v4Smallest[3] = 0.00001;
+    return project(v4Smallest);
 }
-
-
 
 // InitFromStereo() generates the initial match from two keyframes
 // and a vector of image correspondences. Uses the 
-bool MapMaker::InitFromStereo(KeyFrame &kF,
-			      KeyFrame &kS,
-			      vector<pair<ImageRef, ImageRef> > &vTrailMatches,
-			      SE3<> &se3TrackerPose,
-				  SE3<> KFZeroDesiredCamFromWorld,
-				  SE3<> KFOneDesiredCamFromWorld)
+bool MapMaker::InitFromStereo(KeyFrame &kF, KeyFrame &kS,
+        vector<pair<ImageRef, ImageRef> > &vTrailMatches, SE3<> &se3TrackerPose,
+        SE3<> KFZeroDesiredCamFromWorld, SE3<> KFOneDesiredCamFromWorld)
 {
-  mdWiggleScale = *mgvdWiggleScale; // Cache this for the new map.
+    mdWiggleScale = *mgvdWiggleScale; // Cache this for the new map.
 
-  mCamera.SetImageSize(kF.aLevels[0].im.size());
+    mCamera.SetImageSize(kF.aLevels[0].im.size());
 
-  
-  vector<HomographyMatch> vMatches;
-  for(unsigned int i=0; i<vTrailMatches.size(); i++)
+    vector<HomographyMatch> vMatches;
+    for (unsigned int i = 0; i < vTrailMatches.size(); i++)
     {
-      HomographyMatch m;
-      m.v2CamPlaneFirst = mCamera.UnProject(vTrailMatches[i].first);
-      m.v2CamPlaneSecond = mCamera.UnProject(vTrailMatches[i].second);
-      m.m2PixelProjectionJac = mCamera.GetProjectionDerivs();
-      vMatches.push_back(m);
+        HomographyMatch m;
+        m.v2CamPlaneFirst = mCamera.UnProject(vTrailMatches[i].first);
+        m.v2CamPlaneSecond = mCamera.UnProject(vTrailMatches[i].second);
+        m.m2PixelProjectionJac = mCamera.GetProjectionDerivs();
+        vMatches.push_back(m);
     }
 
-  // cerr << "------------------------------------------------" << endl;
-  ss << "-------" << endl;
-  // cerr << "Number of matches :" << vMatches.size() << endl;
-  ss << "Matches: " << vMatches.size() << endl;
+    // cerr << "------------------------------------------------" << endl;
+    ss << "-------" << endl;
+    // cerr << "Number of matches :" << vMatches.size() << endl;
+    ss << "Matches: " << vMatches.size() << endl;
 
-  SE3<> se3;
-  bool bGood;
-  HomographyInit HomographyInit;
-  bGood = HomographyInit.Compute(vMatches, 5.0, se3);
-  if(!bGood)
+    SE3<> se3;
+    bool bGood;
+    HomographyInit HomographyInit;
+    bGood = HomographyInit.Compute(vMatches, 5.0, se3);
+    if (!bGood)
     {
-      cout << "  Could not init from stereo pair, try again." << endl;
-      return false;
-    }
-  
-  // Check that the initialiser estimated a non-zero baseline
-  double dTransMagn = sqrt((double)(se3.get_translation() * se3.get_translation()));
-  double dTransIMUMagn = sqrt((double)((KFZeroDesiredCamFromWorld.get_translation() - KFOneDesiredCamFromWorld.get_translation())*
-	  (KFZeroDesiredCamFromWorld.get_translation() - KFOneDesiredCamFromWorld.get_translation())));
-
-  cerr << "SE3 Translation:" << se3.get_translation() << endl;
-  cerr << "SE3 rotation:" << se3.get_rotation() << endl;
-  cerr << "KFZeroDesiredCamFromWorld Translation:" << KFZeroDesiredCamFromWorld.get_translation() << endl;
-  cerr << "KFZeroDesiredCamFromWorld rotation:" << KFZeroDesiredCamFromWorld.get_rotation() << endl;
-  cerr << "KFOneDesiredCamFromWorld Translation:" << KFOneDesiredCamFromWorld.get_translation() << endl;
-  cerr << "KFOneDesiredCamFromWorld rotation:" << KFOneDesiredCamFromWorld.get_rotation() << endl;
-  cout << "dTransMagn: " << dTransMagn << endl;
-  cout << "dTransIMUMagn: " << dTransIMUMagn << endl;
-  // cerr << "dTransMagn: " << dTransMagn << endl;
-  // cerr << "dTransIMUMagn: " << dTransIMUMagn << endl;
-
-  ss << "dTransMagn: " << dTransMagn << endl;
-  ss << "dTransIMUMagn: " << dTransIMUMagn << endl;
-
-  if(dTransMagn == 0)
-    {
-      cout << "  Estimated zero baseline from stereo pair, try again." << endl;
-      return false;
+        cout << "  Could not init from stereo pair, try again." << endl;
+        return false;
     }
 
-  if(dTransIMUMagn < 0.05)
+    // Check that the initialiser estimated a non-zero baseline
+    double dTransMagn = sqrt(
+            (double) (se3.get_translation() * se3.get_translation()));
+    double dTransIMUMagn = sqrt(
+            (double) ((KFZeroDesiredCamFromWorld.get_translation()
+                    - KFOneDesiredCamFromWorld.get_translation())
+                    * (KFZeroDesiredCamFromWorld.get_translation()
+                            - KFOneDesiredCamFromWorld.get_translation())));
+
+    cerr << "SE3 Translation:" << se3.get_translation() << endl;
+    cerr << "SE3 rotation:" << se3.get_rotation() << endl;
+    cerr << "KFZeroDesiredCamFromWorld Translation:"
+            << KFZeroDesiredCamFromWorld.get_translation() << endl;
+    cerr << "KFZeroDesiredCamFromWorld rotation:"
+            << KFZeroDesiredCamFromWorld.get_rotation() << endl;
+    cerr << "KFOneDesiredCamFromWorld Translation:"
+            << KFOneDesiredCamFromWorld.get_translation() << endl;
+    cerr << "KFOneDesiredCamFromWorld rotation:"
+            << KFOneDesiredCamFromWorld.get_rotation() << endl;
+    cout << "dTransMagn: " << dTransMagn << endl;
+    cout << "dTransIMUMagn: " << dTransIMUMagn << endl;
+    // cerr << "dTransMagn: " << dTransMagn << endl;
+    // cerr << "dTransIMUMagn: " << dTransIMUMagn << endl;
+
+    ss << "dTransMagn: " << dTransMagn << endl;
+    ss << "dTransIMUMagn: " << dTransIMUMagn << endl;
+
+    if (dTransMagn == 0)
     {
-      cout << "  IMU Baseline smaller than 5cm, try again: " << dTransIMUMagn << endl;
-      //return false;
-      dTransIMUMagn = 0.1;
+        cout << "  Estimated zero baseline from stereo pair, try again."
+                << endl;
+        return false;
     }
 
-  //se3.get_translation() *= dTransIMUMagn/dTransMagn;
-
-  // ORIGINAL:
-  // change the scale of the map so the second camera is wiggleScale away from the first
-  se3.get_translation() *= mdWiggleScale/dTransMagn;
-  initialScaleFactor = dTransIMUMagn / mdWiggleScale;
-  
-  KeyFrame *pkFirst = new KeyFrame();
-  KeyFrame *pkSecond = new KeyFrame();
-  *pkFirst = kF;
-  *pkSecond = kS;
-  
-  pkFirst->bFixed = true;
-  pkFirst->se3CfromW = SE3<>();
-  
-  pkSecond->bFixed = false;
-  pkSecond->se3CfromW = se3;
-  
-  // Construct map from the stereo matches.
-  PatchFinder finder;
-
-  for(unsigned int i=0; i<vMatches.size(); i++)
+    if (dTransIMUMagn < 0.05)
     {
-      MapPoint *p = new MapPoint();
-      
-      // Patch source stuff:
-      p->pPatchSourceKF = pkFirst;
-      p->nSourceLevel = 0;
-      p->v3Normal_NC = makeVector( 0,0,-1);
-      p->irCenter = vTrailMatches[i].first;
-      p->v3Center_NC = unproject(mCamera.UnProject(p->irCenter));
-      p->v3OneDownFromCenter_NC = unproject(mCamera.UnProject(p->irCenter + ImageRef(0,1)));
-      p->v3OneRightFromCenter_NC = unproject(mCamera.UnProject(p->irCenter + ImageRef(1,0)));
-      normalize(p->v3Center_NC);
-      normalize(p->v3OneDownFromCenter_NC);
-      normalize(p->v3OneRightFromCenter_NC);
-      p->RefreshPixelVectors();
-
-      // Do sub-pixel alignment on the second image
-      finder.MakeTemplateCoarseNoWarp(*p);
-      finder.MakeSubPixTemplate();
-      finder.SetSubPixPos(vec(vTrailMatches[i].second));
-      // cerr << "vTrailMatches[i].first: " << vTrailMatches[i].first << endl;
-      // cerr << "vTrailMatches[i].second: " << vTrailMatches[i].second << endl;
-
-      ss << "first: " << vTrailMatches[i].first << endl;
-      ss << "second: " << vTrailMatches[i].second << endl;
-
-      bool bGood = finder.IterateSubPixToConvergence(*pkSecond,10);
-      if(!bGood)
-	{ 
-	  delete p; continue;
-	}
-      
-      // Triangulate point:
-      TooN::Vector<2> v2SecondPos = finder.GetSubPixPos();
-      // cerr << "v2SecondPos: " << finder.GetSubPixPos() << endl;
-      ss << "v2SecondPos: " << finder.GetSubPixPos() << endl;
-      p->v3WorldPos = ReprojectPoint(se3, mCamera.UnProject(v2SecondPos), vMatches[i].v2CamPlaneFirst);
-      // cerr << "v3WorldPos: " << p->v3WorldPos << endl << endl;
-
-      ss << "v3WorldPos: " << p->v3WorldPos << endl << endl;
-
-
-      /**************************
-       Devesh is experimenting here.
-      Point3f result;
-      vector<Point2f> match_pair(2);
-      vector<Mat> Rs_k(2), ts_k(2);
-
-      match_pair[0].x = vTrailMatches[i].first.x;
-      match_pair[0].y = vTrailMatches[i].first.y;
-      match_pair[1].x = v2SecondPos[0];
-      match_pair[1].y = v2SecondPos[1];
-
-      Rs_k[0] = (Mat_<double>(3,3) << 1, 0, 0, 0, 1, 0, 0, 0, 1);
-      TooN::Matrix<3> rot = se3.get_rotation().get_matrix();
-      Rs_k[1] = (Mat_<double>(3,3) << 
-              rot[0][0], rot[0][1], rot[0][2],
-              rot[1][0], rot[1][1], rot[1][2],
-              rot[2][0], rot[2][1], rot[2][2]);
-
-      ts_k[0] = (Mat_<double>(3,1) << 0, 0, 0);
-      ts_k[1] = (Mat_<double>(3,1) << se3.get_translation()[0], 
-                                      se3.get_translation()[1],
-                                      se3.get_translation()[2]);
-      Mat cameraMatrix = (Mat_<double>(3,3) << 
-              514.720928, 0.000000, 376.886810,
-              0.000000, 566.574217, 71.489214,
-              0.000000, 0.000000, 1.000000);
-      // cerr << "Re ";
-      result = triangulatePoint(match_pair, Rs_k, ts_k, cameraMatrix);
-      // cerr << result << endl;
-       **************************/
-
-
-
-      if(p->v3WorldPos[2] < 0.0)
-       	{
- 	  delete p; continue;
- 	}
-      
-      // Not behind map? Good, then add to map.
-      p->pMMData = new MapMakerData();
-      mMap.vpPoints.push_back(p);
-      
-      // Construct first two measurements and insert into relevant DBs:
-      Measurement mFirst;
-      mFirst.nLevel = 0;
-      mFirst.Source = Measurement::SRC_ROOT;
-      mFirst.v2RootPos = vec(vTrailMatches[i].first);
-      mFirst.bSubPix = true;
-      pkFirst->mMeasurements[p] = mFirst;
-      p->pMMData->sMeasurementKFs.insert(pkFirst);
-      
-      Measurement mSecond;
-      mSecond.nLevel = 0;
-      mSecond.Source = Measurement::SRC_TRAIL;
-      mSecond.v2RootPos = finder.GetSubPixPos();
-      mSecond.bSubPix = true;
-      pkSecond->mMeasurements[p] = mSecond;
-      p->pMMData->sMeasurementKFs.insert(pkSecond);
+        cout << "  IMU Baseline smaller than 5cm, try again: " << dTransIMUMagn
+                << endl;
+        //return false;
+        dTransIMUMagn = 0.1;
     }
-  
-  mMap.vpKeyFrames.push_back(pkFirst);
-  mMap.vpKeyFrames.push_back(pkSecond);
-  pkFirst->MakeKeyFrame_Rest();
-  pkSecond->MakeKeyFrame_Rest();
-  
-  for(int i=0; i<5; i++)
-    BundleAdjustAll();
 
-  // Estimate the feature depth distribution in the first two key-frames
-  // (Needed for epipolar search)
-  RefreshSceneDepth(pkFirst);
-  RefreshSceneDepth(pkSecond);
-  mdWiggleScaleDepthNormalized = mdWiggleScale / pkFirst->dSceneDepthMean;
+    //se3.get_translation() *= dTransIMUMagn/dTransMagn;
 
-  // cerr << "pkFirst->dSceneDepthMean:" << pkFirst->dSceneDepthMean << endl;
-  // cerr << "pkSecond->dSceneDepthMean:" << pkSecond->dSceneDepthMean << endl;
-  // cerr << "pkFirst->dSceneDepthSigma:" << pkFirst->dSceneDepthSigma << endl;
-  // cerr << "pkSecond->dSceneDepthSigma:" << pkSecond->dSceneDepthSigma << endl;
+    // ORIGINAL:
+    // change the scale of the map so the second camera is wiggleScale away from the first
+    se3.get_translation() *= mdWiggleScale / dTransMagn;
+    initialScaleFactor = dTransIMUMagn / mdWiggleScale;
 
-  ss << "FirstDepthMean:" << pkFirst->dSceneDepthMean << endl;
-  ss << "FirstDepthSigma:" << pkFirst->dSceneDepthSigma << endl;
-  ss << "SecondDepthMean:" << pkSecond->dSceneDepthMean << endl;
-  ss << "SecondDepthSigma:" << pkSecond->dSceneDepthSigma << endl;
+    KeyFrame *pkFirst = new KeyFrame();
+    KeyFrame *pkSecond = new KeyFrame();
+    *pkFirst = kF;
+    *pkSecond = kS;
 
-  msg.data = ss.str();
-  ss.str(std::string()); // Clearing for next use.
-  chatter_pub.publish(msg);
+    pkFirst->bFixed = true;
+    pkFirst->se3CfromW = SE3<>();
 
-  CVD::img_save(kF.aLevels[0].im, "/home/relab/im1.png");
-  CVD::img_save(kS.aLevels[0].im, "/home/relab/im2.png");
+    pkSecond->bFixed = false;
+    pkSecond->se3CfromW = se3;
 
+    // Construct map from the stereo matches.
+    PatchFinder finder;
 
-  AddSomeMapPoints(0);
-  AddSomeMapPoints(3);
-  AddSomeMapPoints(1);
-  AddSomeMapPoints(2);
-  
-  mbBundleConverged_Full = false;
-  mbBundleConverged_Recent = false;
-  
-  time_t started = clock();
-  while(!mbBundleConverged_Full)
+    for (unsigned int i = 0; i < vMatches.size(); i++)
     {
-      BundleAdjustAll();
-      if(mbResetRequested || ((double)(clock() - started))/(double)CLOCKS_PER_SEC > 2.000)
-	  {
-			printf("ABORT mapmaking, took more than 1.5s (deadlock?)\n");
-			return false;
-	  }
+        MapPoint *p = new MapPoint();
+
+        // Patch source stuff:
+        p->pPatchSourceKF = pkFirst;
+        p->nSourceLevel = 0;
+        p->v3Normal_NC = makeVector(0, 0, -1);
+        p->irCenter = vTrailMatches[i].first;
+        p->v3Center_NC = unproject(mCamera.UnProject(p->irCenter));
+        p->v3OneDownFromCenter_NC = unproject(
+                mCamera.UnProject(p->irCenter + ImageRef(0, 1)));
+        p->v3OneRightFromCenter_NC = unproject(
+                mCamera.UnProject(p->irCenter + ImageRef(1, 0)));
+        normalize(p->v3Center_NC);
+        normalize(p->v3OneDownFromCenter_NC);
+        normalize(p->v3OneRightFromCenter_NC);
+        p->RefreshPixelVectors();
+
+        // Do sub-pixel alignment on the second image
+        finder.MakeTemplateCoarseNoWarp(*p);
+        finder.MakeSubPixTemplate();
+        finder.SetSubPixPos(vec(vTrailMatches[i].second));
+        // cerr << "vTrailMatches[i].first: " << vTrailMatches[i].first << endl;
+        // cerr << "vTrailMatches[i].second: " << vTrailMatches[i].second << endl;
+
+        ss << "first: " << vTrailMatches[i].first << endl;
+        ss << "second: " << vTrailMatches[i].second << endl;
+
+        bool bGood = finder.IterateSubPixToConvergence(*pkSecond, 10);
+        if (!bGood)
+        {
+            delete p;
+            continue;
+        }
+
+        // Triangulate point:
+        TooN::Vector<2> v2SecondPos = finder.GetSubPixPos();
+        // cerr << "v2SecondPos: " << finder.GetSubPixPos() << endl;
+        ss << "v2SecondPos: " << finder.GetSubPixPos() << endl;
+        p->v3WorldPos = ReprojectPoint(se3, mCamera.UnProject(v2SecondPos),
+                vMatches[i].v2CamPlaneFirst);
+        // cerr << "v3WorldPos: " << p->v3WorldPos << endl << endl;
+
+        ss << "v3WorldPos: " << p->v3WorldPos << endl << endl;
+
+        /**************************
+         Devesh is experimenting here.
+         Point3f result;
+         vector<Point2f> match_pair(2);
+         vector<Mat> Rs_k(2), ts_k(2);
+
+         match_pair[0].x = vTrailMatches[i].first.x;
+         match_pair[0].y = vTrailMatches[i].first.y;
+         match_pair[1].x = v2SecondPos[0];
+         match_pair[1].y = v2SecondPos[1];
+
+         Rs_k[0] = (Mat_<double>(3,3) << 1, 0, 0, 0, 1, 0, 0, 0, 1);
+         TooN::Matrix<3> rot = se3.get_rotation().get_matrix();
+         Rs_k[1] = (Mat_<double>(3,3) <<
+         rot[0][0], rot[0][1], rot[0][2],
+         rot[1][0], rot[1][1], rot[1][2],
+         rot[2][0], rot[2][1], rot[2][2]);
+
+         ts_k[0] = (Mat_<double>(3,1) << 0, 0, 0);
+         ts_k[1] = (Mat_<double>(3,1) << se3.get_translation()[0],
+         se3.get_translation()[1],
+         se3.get_translation()[2]);
+         Mat cameraMatrix = (Mat_<double>(3,3) <<
+         514.720928, 0.000000, 376.886810,
+         0.000000, 566.574217, 71.489214,
+         0.000000, 0.000000, 1.000000);
+         // cerr << "Re ";
+         result = triangulatePoint(match_pair, Rs_k, ts_k, cameraMatrix);
+         // cerr << result << endl;
+         **************************/
+
+        if (p->v3WorldPos[2] < 0.0)
+        {
+            delete p;
+            continue;
+        }
+
+        // Not behind map? Good, then add to map.
+        p->pMMData = new MapMakerData();
+        mMap.vpPoints.push_back(p);
+
+        // Construct first two measurements and insert into relevant DBs:
+        Measurement mFirst;
+        mFirst.nLevel = 0;
+        mFirst.Source = Measurement::SRC_ROOT;
+        mFirst.v2RootPos = vec(vTrailMatches[i].first);
+        mFirst.bSubPix = true;
+        pkFirst->mMeasurements[p] = mFirst;
+        p->pMMData->sMeasurementKFs.insert(pkFirst);
+
+        Measurement mSecond;
+        mSecond.nLevel = 0;
+        mSecond.Source = Measurement::SRC_TRAIL;
+        mSecond.v2RootPos = finder.GetSubPixPos();
+        mSecond.bSubPix = true;
+        pkSecond->mMeasurements[p] = mSecond;
+        p->pMMData->sMeasurementKFs.insert(pkSecond);
     }
-  
-  
-  // Rotate and translate the map so the dominant plane is at z=0:
-  printf("PTAM Init: re-scaleing map with %f\n",0.1/pkFirst->dSceneDepthMean);
-  ApplyGlobalScaleToMap(1/pkFirst->dSceneDepthMean);
-  initialScaleFactor *= pkFirst->dSceneDepthMean;
-  ApplyGlobalTransformationToMap(KFZeroDesiredCamFromWorld.inverse());
-  
-  mMap.bGood = true;
-  se3TrackerPose = pkSecond->se3CfromW;
 
-  
-  cout << "  MapMaker: made initial map with " << mMap.vpPoints.size() << " points." << endl;
+    mMap.vpKeyFrames.push_back(pkFirst);
+    mMap.vpKeyFrames.push_back(pkSecond);
+    pkFirst->MakeKeyFrame_Rest();
+    pkSecond->MakeKeyFrame_Rest();
 
-  TooN::Vector<3> ptamTrans = mMap.vpKeyFrames[1]->se3CfromW.get_translation() - mMap.vpKeyFrames[0]->se3CfromW.get_translation();
-  TooN::Vector<3> imuTrans = KFOneDesiredCamFromWorld.get_translation() - KFZeroDesiredCamFromWorld.get_translation();
+    for (int i = 0; i < 5; i++)
+        BundleAdjustAll();
 
+    // Estimate the feature depth distribution in the first two key-frames
+    // (Needed for epipolar search)
+    RefreshSceneDepth(pkFirst);
+    RefreshSceneDepth(pkSecond);
+    mdWiggleScaleDepthNormalized = mdWiggleScale / pkFirst->dSceneDepthMean;
 
-  printf("resulting PTAM Translation: (%.4f, %.4f, %.4f), IMU translation: (%.4f, %.4f, %.4f)",
-	  ptamTrans[0],
-	  ptamTrans[1],
-	  ptamTrans[2],
-	  imuTrans[0],
-	  imuTrans[1],
-	  imuTrans[2]);
-  
-	ptamTrans = ptamTrans / sqrt((double)(ptamTrans*ptamTrans));
-	imuTrans = imuTrans / sqrt((double)(imuTrans*imuTrans));
-	double angle = 180*acos((double)(ptamTrans * imuTrans))/3.1415;
+    // cerr << "pkFirst->dSceneDepthMean:" << pkFirst->dSceneDepthMean << endl;
+    // cerr << "pkSecond->dSceneDepthMean:" << pkSecond->dSceneDepthMean << endl;
+    // cerr << "pkFirst->dSceneDepthSigma:" << pkFirst->dSceneDepthSigma << endl;
+    // cerr << "pkSecond->dSceneDepthSigma:" << pkSecond->dSceneDepthSigma << endl;
 
-	
-	if(angle > 6000)
-	{
-		printf("\nAngle between estimated Translation is too large (%.1f): try again!\n",angle);
-		return false;
-	}
-	else
-		printf(", angle: %.1f\n",angle);
+    ss << "FirstDepthMean:" << pkFirst->dSceneDepthMean << endl;
+    ss << "FirstDepthSigma:" << pkFirst->dSceneDepthSigma << endl;
+    ss << "SecondDepthMean:" << pkSecond->dSceneDepthMean << endl;
+    ss << "SecondDepthSigma:" << pkSecond->dSceneDepthSigma << endl;
 
-  return true; 
+    msg.data = ss.str();
+    ss.str(std::string()); // Clearing for next use.
+    chatter_pub.publish(msg);
+
+    CVD::img_save(kF.aLevels[0].im, "/home/relab/im1.png");
+    CVD::img_save(kS.aLevels[0].im, "/home/relab/im2.png");
+
+    AddSomeMapPoints(0);
+    AddSomeMapPoints(3);
+    AddSomeMapPoints(1);
+    AddSomeMapPoints(2);
+
+    mbBundleConverged_Full = false;
+    mbBundleConverged_Recent = false;
+
+    time_t started = clock();
+    while (!mbBundleConverged_Full)
+    {
+        BundleAdjustAll();
+        if (mbResetRequested
+                || ((double) (clock() - started)) / (double) CLOCKS_PER_SEC
+                        > 2.000)
+        {
+            printf("ABORT mapmaking, took more than 1.5s (deadlock?)\n");
+            return false;
+        }
+    }
+
+    // Rotate and translate the map so the dominant plane is at z=0:
+    printf("PTAM Init: re-scaleing map with %f\n",
+            0.1 / pkFirst->dSceneDepthMean);
+    ApplyGlobalScaleToMap(1 / pkFirst->dSceneDepthMean);
+    initialScaleFactor *= pkFirst->dSceneDepthMean;
+    ApplyGlobalTransformationToMap(KFZeroDesiredCamFromWorld.inverse());
+
+    mMap.bGood = true;
+    se3TrackerPose = pkSecond->se3CfromW;
+
+    cout << "  MapMaker: made initial map with " << mMap.vpPoints.size()
+            << " points." << endl;
+
+    TooN::Vector<3> ptamTrans = mMap.vpKeyFrames[1]->se3CfromW.get_translation()
+            - mMap.vpKeyFrames[0]->se3CfromW.get_translation();
+    TooN::Vector<3> imuTrans = KFOneDesiredCamFromWorld.get_translation()
+            - KFZeroDesiredCamFromWorld.get_translation();
+
+    printf(
+            "resulting PTAM Translation: (%.4f, %.4f, %.4f), IMU translation: (%.4f, %.4f, %.4f)",
+            ptamTrans[0], ptamTrans[1], ptamTrans[2], imuTrans[0], imuTrans[1],
+            imuTrans[2]);
+
+    ptamTrans = ptamTrans / sqrt((double) (ptamTrans * ptamTrans));
+    imuTrans = imuTrans / sqrt((double) (imuTrans * imuTrans));
+    double angle = 180 * acos((double) (ptamTrans * imuTrans)) / 3.1415;
+
+    if (angle > 6000)
+    {
+        printf(
+                "\nAngle between estimated Translation is too large (%.1f): try again!\n",
+                angle);
+        return false;
+    }
+    else
+        printf(", angle: %.1f\n", angle);
+
+    return true;
 }
 
 // ThinCandidates() Thins out a key-frame's candidate list.
@@ -825,31 +514,33 @@ void MapMaker::ThinCandidates(KeyFrame &k, int nLevel)
     vector<ImageRef> irBusyLevelPos;
     // Make a list of `busy' image locations, which already have features at the same level
     // or at one level higher.
-    for(meas_it it = k.mMeasurements.begin(); it!=k.mMeasurements.end(); it++)
+    for (meas_it it = k.mMeasurements.begin(); it != k.mMeasurements.end();
+            it++)
     {
-        if(!(it->second.nLevel == nLevel || it->second.nLevel == nLevel + 1))
+        if (!(it->second.nLevel == nLevel || it->second.nLevel == nLevel + 1))
             continue;
-        irBusyLevelPos.push_back(ir_rounded(it->second.v2RootPos / LevelScale(nLevel)));
+        irBusyLevelPos.push_back(
+                ir_rounded(it->second.v2RootPos / LevelScale(nLevel)));
     }
 
     // Only keep those candidates further than 5 pixels away from busy positions.
-    unsigned int nMinMagSquared = 5*5;
-    for(unsigned int i=0; i<vCSrc.size(); i++)
+    unsigned int nMinMagSquared = 5 * 5;
+    for (unsigned int i = 0; i < vCSrc.size(); i++)
     {
         ImageRef irC = vCSrc[i].irLevelPos;
         bool bGood = true;
-        for(unsigned int j=0; j<irBusyLevelPos.size(); j++)
+        for (unsigned int j = 0; j < irBusyLevelPos.size(); j++)
         {
             ImageRef irB = irBusyLevelPos[j];
-            if((irB - irC).mag_squared() < nMinMagSquared)
+            if ((irB - irC).mag_squared() < nMinMagSquared)
             {
                 bGood = false;
                 break;
             }
         }
-        if(bGood)
+        if (bGood)
             vCGood.push_back(vCSrc[i]);
-    } 
+    }
     vCSrc = vCGood;
 }
 
@@ -858,51 +549,53 @@ void MapMaker::ThinCandidates(KeyFrame &k, int nLevel)
 // the ClosestKeyFrame function.
 void MapMaker::AddSomeMapPoints(int nLevel)
 {
-  KeyFrame &kSrc = *(mMap.vpKeyFrames[mMap.vpKeyFrames.size() - 1]); // The new keyframe
-  KeyFrame &kTarget = *(ClosestKeyFrame(kSrc));   
-  Level &l = kSrc.aLevels[nLevel];
+    KeyFrame &kSrc = *(mMap.vpKeyFrames[mMap.vpKeyFrames.size() - 1]); // The new keyframe
+    KeyFrame &kTarget = *(ClosestKeyFrame(kSrc));
+    Level &l = kSrc.aLevels[nLevel];
 
-  ThinCandidates(kSrc, nLevel);
-  
-  for(unsigned int i = 0; i<l.vCandidates.size(); i++)
-    AddPointEpipolar(kSrc, kTarget, nLevel, i);
-};
+    ThinCandidates(kSrc, nLevel);
+
+    for (unsigned int i = 0; i < l.vCandidates.size(); i++)
+        AddPointEpipolar(kSrc, kTarget, nLevel, i);
+}
+;
 
 // Rotates/translates the whole map and all keyframes
 void MapMaker::ApplyGlobalTransformationToMap(SE3<> se3NewFromOld)
 {
-  for(unsigned int i=0; i<mMap.vpKeyFrames.size(); i++)
-    mMap.vpKeyFrames[i]->se3CfromW = mMap.vpKeyFrames[i]->se3CfromW * se3NewFromOld.inverse();
-  
-  //SO3<> so3Rot = se3NewFromOld.get_rotation();
-  for(unsigned int i=0; i<mMap.vpPoints.size(); i++)
+    for (unsigned int i = 0; i < mMap.vpKeyFrames.size(); i++)
+        mMap.vpKeyFrames[i]->se3CfromW = mMap.vpKeyFrames[i]->se3CfromW
+                * se3NewFromOld.inverse();
+
+    //SO3<> so3Rot = se3NewFromOld.get_rotation();
+    for (unsigned int i = 0; i < mMap.vpPoints.size(); i++)
     {
-      mMap.vpPoints[i]->v3WorldPos = 
-	se3NewFromOld * mMap.vpPoints[i]->v3WorldPos;
-      mMap.vpPoints[i]->RefreshPixelVectors();
+        mMap.vpPoints[i]->v3WorldPos = se3NewFromOld
+                * mMap.vpPoints[i]->v3WorldPos;
+        mMap.vpPoints[i]->RefreshPixelVectors();
     }
 }
 
 // Applies a global scale factor to the map
 void MapMaker::ApplyGlobalScaleToMap(double dScale)
 {
-  for(unsigned int i=0; i<mMap.vpKeyFrames.size(); i++)
-  {
-    mMap.vpKeyFrames[i]->se3CfromW.get_translation() *= dScale;
-  }
-  
-  for(unsigned int i=0; i<mMap.vpPoints.size(); i++)
+    for (unsigned int i = 0; i < mMap.vpKeyFrames.size(); i++)
     {
-      (*mMap.vpPoints[i]).v3WorldPos *= dScale;
-      (*mMap.vpPoints[i]).v3PixelRight_W *= dScale;
-      (*mMap.vpPoints[i]).v3PixelDown_W *= dScale;
-      (*mMap.vpPoints[i]).RefreshPixelVectors();
+        mMap.vpKeyFrames[i]->se3CfromW.get_translation() *= dScale;
     }
 
-  for(unsigned int i=0; i<mMap.vpKeyFrames.size(); i++)
-  {
-	RefreshSceneDepth(mMap.vpKeyFrames[i]);
-  }
+    for (unsigned int i = 0; i < mMap.vpPoints.size(); i++)
+    {
+        (*mMap.vpPoints[i]).v3WorldPos *= dScale;
+        (*mMap.vpPoints[i]).v3PixelRight_W *= dScale;
+        (*mMap.vpPoints[i]).v3PixelDown_W *= dScale;
+        (*mMap.vpPoints[i]).RefreshPixelVectors();
+    }
+
+    for (unsigned int i = 0; i < mMap.vpKeyFrames.size(); i++)
+    {
+        RefreshSceneDepth(mMap.vpKeyFrames[i]);
+    }
 }
 
 // The tracker entry point for adding a new keyframe;
@@ -911,200 +604,216 @@ void MapMaker::ApplyGlobalScaleToMap(double dScale)
 // be dealt with later, and return.
 void MapMaker::AddKeyFrame(KeyFrame &k)
 {
-  KeyFrame *pK = new KeyFrame;
-  *pK = k;
-  pK->pSBI = NULL; // Mapmaker uses a different SBI than the tracker, so will re-gen its own
-  mvpKeyFrameQueue.push_back(pK);
-  if(mbBundleRunning)   // Tell the mapmaker to stop doing low-priority stuff and concentrate on this KF first.
-    mbBundleAbortRequested = true;
+    KeyFrame *pK = new KeyFrame;
+    *pK = k;
+    pK->pSBI = NULL; // Mapmaker uses a different SBI than the tracker, so will re-gen its own
+    mvpKeyFrameQueue.push_back(pK);
+    if (mbBundleRunning) // Tell the mapmaker to stop doing low-priority stuff and concentrate on this KF first.
+        mbBundleAbortRequested = true;
 }
 
 // Mapmaker's code to handle incoming key-frames.
 void MapMaker::AddKeyFrameFromTopOfQueue()
 {
-  if(mvpKeyFrameQueue.size() == 0)
-    return;
-  
-  KeyFrame *pK = mvpKeyFrameQueue[0];
-  mvpKeyFrameQueue.erase(mvpKeyFrameQueue.begin());
-  pK->MakeKeyFrame_Rest();
-  mMap.vpKeyFrames.push_back(pK);
-  // Any measurements? Update the relevant point's measurement counter status map
-  for(meas_it it = pK->mMeasurements.begin();
-      it!=pK->mMeasurements.end();
-      it++)
+    if (mvpKeyFrameQueue.size() == 0)
+        return;
+
+    KeyFrame *pK = mvpKeyFrameQueue[0];
+    mvpKeyFrameQueue.erase(mvpKeyFrameQueue.begin());
+    pK->MakeKeyFrame_Rest();
+    mMap.vpKeyFrames.push_back(pK);
+    // Any measurements? Update the relevant point's measurement counter status map
+    for (meas_it it = pK->mMeasurements.begin(); it != pK->mMeasurements.end();
+            it++)
     {
-      it->first->pMMData->sMeasurementKFs.insert(pK);
-      it->second.Source = Measurement::SRC_TRACKER;
+        it->first->pMMData->sMeasurementKFs.insert(pK);
+        it->second.Source = Measurement::SRC_TRACKER;
     }
-  
-  // And maybe we missed some - this now adds to the map itself, too.
-  ReFindInSingleKeyFrame(*pK);
-  
-  AddSomeMapPoints(3);       // .. and add more map points by epipolar search.
-  AddSomeMapPoints(0);
-  AddSomeMapPoints(1);
-  AddSomeMapPoints(2);
-  
-  mbBundleConverged_Full = false;
-  mbBundleConverged_Recent = false;
+
+    // And maybe we missed some - this now adds to the map itself, too.
+    ReFindInSingleKeyFrame(*pK);
+
+    AddSomeMapPoints(3); // .. and add more map points by epipolar search.
+    AddSomeMapPoints(0);
+    AddSomeMapPoints(1);
+    AddSomeMapPoints(2);
+
+    mbBundleConverged_Full = false;
+    mbBundleConverged_Recent = false;
 }
 
 // Tries to make a new map point out of a single candidate point
 // by searching for that point in another keyframe, and triangulating
 // if a match is found.
-bool MapMaker::AddPointEpipolar(KeyFrame &kSrc, 
-				KeyFrame &kTarget, 
-				int nLevel,
-				int nCandidate)
+bool MapMaker::AddPointEpipolar(KeyFrame &kSrc, KeyFrame &kTarget, int nLevel,
+        int nCandidate)
 {
-  static Image<TooN::Vector<2> > imUnProj;
-  static bool bMadeCache = false;
-  if(!bMadeCache)
+    static Image<TooN::Vector<2> > imUnProj;
+    static bool bMadeCache = false;
+    if (!bMadeCache)
     {
-      imUnProj.resize(kSrc.aLevels[0].im.size());
-      ImageRef ir;
-      do imUnProj[ir] = mCamera.UnProject(ir);
-      while(ir.next(imUnProj.size()));
-      bMadeCache = true;
+        imUnProj.resize(kSrc.aLevels[0].im.size());
+        ImageRef ir;
+        do
+            imUnProj[ir] = mCamera.UnProject(ir);
+        while (ir.next(imUnProj.size()));
+        bMadeCache = true;
     }
-  
-  int nLevelScale = LevelScale(nLevel);
-  Candidate &candidate = kSrc.aLevels[nLevel].vCandidates[nCandidate];
-  ImageRef irLevelPos = candidate.irLevelPos;
-  TooN::Vector<2> v2RootPos = LevelZeroPos(irLevelPos, nLevel);
-  
-  TooN::Vector<3> v3Ray_SC = unproject(mCamera.UnProject(v2RootPos));
-  normalize(v3Ray_SC);
-  TooN::Vector<3> v3LineDirn_TC = kTarget.se3CfromW.get_rotation() * (kSrc.se3CfromW.get_rotation().inverse() * v3Ray_SC);
 
-  // Restrict epipolar search to a relatively narrow depth range
-  // to increase reliability
-  double dMean = kSrc.dSceneDepthMean;
-  double dSigma = kSrc.dSceneDepthSigma;
-  double dStartDepth = max(mdWiggleScale*0.75, dMean - dSigma * 1.5);
-  double dEndDepth = min(40 * mdWiggleScale * 1.5, dMean + dSigma * 1.5);
-  
-  TooN::Vector<3> v3CamCenter_TC = kTarget.se3CfromW * kSrc.se3CfromW.inverse().get_translation(); // The camera end
-  TooN::Vector<3> v3RayStart_TC = v3CamCenter_TC + dStartDepth * v3LineDirn_TC;                               // the far-away end
-  TooN::Vector<3> v3RayEnd_TC = v3CamCenter_TC + dEndDepth * v3LineDirn_TC;                               // the far-away end
+    int nLevelScale = LevelScale(nLevel);
+    Candidate &candidate = kSrc.aLevels[nLevel].vCandidates[nCandidate];
+    ImageRef irLevelPos = candidate.irLevelPos;
+    TooN::Vector<2> v2RootPos = LevelZeroPos(irLevelPos, nLevel);
 
-  
-  if(v3RayEnd_TC[2] <= v3RayStart_TC[2])  // it's highly unlikely that we'll manage to get anything out if we're facing backwards wrt the other camera's view-ray
-    return false;
-  if(v3RayEnd_TC[2] <= 0.0 )  return false;
-  if(v3RayStart_TC[2] <= 0.0)
-    v3RayStart_TC += v3LineDirn_TC * (0.001 - v3RayStart_TC[2] / v3LineDirn_TC[2]);
-  
-  TooN::Vector<2> v2A = project(v3RayStart_TC);
-  TooN::Vector<2> v2B = project(v3RayEnd_TC);
-  TooN::Vector<2> v2AlongProjectedLine = v2A-v2B;
-  
-  if(v2AlongProjectedLine * v2AlongProjectedLine < 0.00000001)
+    TooN::Vector<3> v3Ray_SC = unproject(mCamera.UnProject(v2RootPos));
+    normalize(v3Ray_SC);
+    TooN::Vector<3> v3LineDirn_TC = kTarget.se3CfromW.get_rotation()
+            * (kSrc.se3CfromW.get_rotation().inverse() * v3Ray_SC);
+
+    // Restrict epipolar search to a relatively narrow depth range
+    // to increase reliability
+    double dMean = kSrc.dSceneDepthMean;
+    double dSigma = kSrc.dSceneDepthSigma;
+    double dStartDepth = max(mdWiggleScale * 0.75, dMean - dSigma * 1.5);
+    double dEndDepth = min(40 * mdWiggleScale * 1.5, dMean + dSigma * 1.5);
+
+    TooN::Vector<3> v3CamCenter_TC = kTarget.se3CfromW
+            * kSrc.se3CfromW.inverse().get_translation(); // The camera end
+    TooN::Vector<3> v3RayStart_TC = v3CamCenter_TC
+            + dStartDepth * v3LineDirn_TC; // the far-away end
+    TooN::Vector<3> v3RayEnd_TC = v3CamCenter_TC + dEndDepth * v3LineDirn_TC; // the far-away end
+
+    if (v3RayEnd_TC[2] <= v3RayStart_TC[2]) // it's highly unlikely that we'll manage to get anything out if we're facing backwards wrt the other camera's view-ray
+        return false;
+    if (v3RayEnd_TC[2] <= 0.0)
+        return false;
+    if (v3RayStart_TC[2] <= 0.0)
+        v3RayStart_TC += v3LineDirn_TC
+                * (0.001 - v3RayStart_TC[2] / v3LineDirn_TC[2]);
+
+    TooN::Vector<2> v2A = project(v3RayStart_TC);
+    TooN::Vector<2> v2B = project(v3RayEnd_TC);
+    TooN::Vector<2> v2AlongProjectedLine = v2A - v2B;
+
+    if (v2AlongProjectedLine * v2AlongProjectedLine < 0.00000001)
     {
-      cout << "v2AlongProjectedLine too small." << endl;
-      return false;
+        cout << "v2AlongProjectedLine too small." << endl;
+        return false;
     }
-  normalize(v2AlongProjectedLine);
-  TooN::Vector<2> v2Normal;
-  v2Normal[0] = v2AlongProjectedLine[1];
-  v2Normal[1] = -v2AlongProjectedLine[0];
-  
-  double dNormDist = v2A * v2Normal;
-  if(fabs(dNormDist) > mCamera.LargestRadiusInImage() )
-    return false;
-  
-  double dMinLen = min(v2AlongProjectedLine * v2A, v2AlongProjectedLine * v2B) - 0.05;
-  double dMaxLen = max(v2AlongProjectedLine * v2A, v2AlongProjectedLine * v2B) + 0.05;
-  if(dMinLen < -2.0)  dMinLen = -2.0;
-  if(dMaxLen < -2.0)  dMaxLen = -2.0;
-  if(dMinLen > 2.0)   dMinLen = 2.0;
-  if(dMaxLen > 2.0)   dMaxLen = 2.0;
+    normalize(v2AlongProjectedLine);
+    TooN::Vector<2> v2Normal;
+    v2Normal[0] = v2AlongProjectedLine[1];
+    v2Normal[1] = -v2AlongProjectedLine[0];
 
-  // Find current-frame corners which might match this
-  PatchFinder Finder;
-  Finder.MakeTemplateCoarseNoWarp(kSrc, nLevel, irLevelPos);
-  if(Finder.TemplateBad())  return false;
-  
-  vector<TooN::Vector<2> > &vv2Corners = kTarget.aLevels[nLevel].vImplaneCorners;
-  vector<ImageRef> &vIR = kTarget.aLevels[nLevel].vCorners;
-  if(!kTarget.aLevels[nLevel].bImplaneCornersCached)
+    double dNormDist = v2A * v2Normal;
+    if (fabs(dNormDist) > mCamera.LargestRadiusInImage())
+        return false;
+
+    double dMinLen = min(v2AlongProjectedLine * v2A, v2AlongProjectedLine * v2B)
+            - 0.05;
+    double dMaxLen = max(v2AlongProjectedLine * v2A, v2AlongProjectedLine * v2B)
+            + 0.05;
+    if (dMinLen < -2.0)
+        dMinLen = -2.0;
+    if (dMaxLen < -2.0)
+        dMaxLen = -2.0;
+    if (dMinLen > 2.0)
+        dMinLen = 2.0;
+    if (dMaxLen > 2.0)
+        dMaxLen = 2.0;
+
+    // Find current-frame corners which might match this
+    PatchFinder Finder;
+    Finder.MakeTemplateCoarseNoWarp(kSrc, nLevel, irLevelPos);
+    if (Finder.TemplateBad())
+        return false;
+
+    vector<TooN::Vector<2> > &vv2Corners =
+            kTarget.aLevels[nLevel].vImplaneCorners;
+    vector<ImageRef> &vIR = kTarget.aLevels[nLevel].vCorners;
+    if (!kTarget.aLevels[nLevel].bImplaneCornersCached)
     {
-      for(unsigned int i=0; i<vIR.size(); i++)   // over all corners in target img..
-	vv2Corners.push_back(imUnProj[ir(LevelZeroPos(vIR[i], nLevel))]);
-      kTarget.aLevels[nLevel].bImplaneCornersCached = true;
+        for (unsigned int i = 0; i < vIR.size(); i++) // over all corners in target img..
+            vv2Corners.push_back(imUnProj[ir(LevelZeroPos(vIR[i], nLevel))]);
+        kTarget.aLevels[nLevel].bImplaneCornersCached = true;
     }
-  
-  int nBest = -1;
-  int nBestZMSSD = Finder.mnMaxSSD + 1;
-  double dMaxDistDiff = mCamera.OnePixelDist() * (4.0 + 1.0 * nLevelScale);
-  double dMaxDistSq = dMaxDistDiff * dMaxDistDiff;
-  
-  for(unsigned int i=0; i<vv2Corners.size(); i++)   // over all corners in target img..
+
+    int nBest = -1;
+    int nBestZMSSD = Finder.mnMaxSSD + 1;
+    double dMaxDistDiff = mCamera.OnePixelDist() * (4.0 + 1.0 * nLevelScale);
+    double dMaxDistSq = dMaxDistDiff * dMaxDistDiff;
+
+    for (unsigned int i = 0; i < vv2Corners.size(); i++) // over all corners in target img..
     {
         TooN::Vector<2> v2Im = vv2Corners[i];
-      double dDistDiff = dNormDist - v2Im * v2Normal;
-      if(dDistDiff * dDistDiff > dMaxDistSq)	continue; // skip if not along epi line
-      if(v2Im * v2AlongProjectedLine < dMinLen)	continue; // skip if not far enough along line
-      if(v2Im * v2AlongProjectedLine > dMaxLen)	continue; // or too far
-      int nZMSSD = Finder.ZMSSDAtPoint(kTarget.aLevels[nLevel].im, vIR[i]);
-      if(nZMSSD < nBestZMSSD)
-	{
-	  nBest = i;
-	  nBestZMSSD = nZMSSD;
-	}
-    } 
-  
-  if(nBest == -1)   return false;   // Nothing found.
-  
-  //  Found a likely candidate along epipolar ray
-  Finder.MakeSubPixTemplate();
-  Finder.SetSubPixPos(LevelZeroPos(vIR[nBest], nLevel));
-  bool bSubPixConverges = Finder.IterateSubPixToConvergence(kTarget,10);
-  if(!bSubPixConverges)
-    return false;
-  
-  // Now triangulate the 3d point...
-  TooN::Vector<3> v3New;
-  v3New = kTarget.se3CfromW.inverse() *  
-    ReprojectPoint(kSrc.se3CfromW * kTarget.se3CfromW.inverse(),
-		   mCamera.UnProject(v2RootPos), 
-		   mCamera.UnProject(Finder.GetSubPixPos()));
-  
-  MapPoint *pNew = new MapPoint;
-  pNew->v3WorldPos = v3New;
-  pNew->pMMData = new MapMakerData();
-  
-  // Patch source stuff:
-  pNew->pPatchSourceKF = &kSrc;
-  pNew->nSourceLevel = nLevel;
-  pNew->v3Normal_NC = makeVector( 0,0,-1);
-  pNew->irCenter = irLevelPos;
-  pNew->v3Center_NC = unproject(mCamera.UnProject(v2RootPos));
-  pNew->v3OneRightFromCenter_NC = unproject(mCamera.UnProject(v2RootPos + vec(ImageRef(nLevelScale,0))));
-  pNew->v3OneDownFromCenter_NC  = unproject(mCamera.UnProject(v2RootPos + vec(ImageRef(0,nLevelScale))));
-  
-  normalize(pNew->v3Center_NC);
-  normalize(pNew->v3OneDownFromCenter_NC);
-  normalize(pNew->v3OneRightFromCenter_NC);
-  
-  pNew->RefreshPixelVectors();
-    
-  mMap.vpPoints.push_back(pNew);
-  mqNewQueue.push(pNew);
-  Measurement m;
-  m.Source = Measurement::SRC_ROOT;
-  m.v2RootPos = v2RootPos;
-  m.nLevel = nLevel;
-  m.bSubPix = true;
-  kSrc.mMeasurements[pNew] = m;
+        double dDistDiff = dNormDist - v2Im * v2Normal;
+        if (dDistDiff * dDistDiff > dMaxDistSq)
+            continue; // skip if not along epi line
+        if (v2Im * v2AlongProjectedLine < dMinLen)
+            continue; // skip if not far enough along line
+        if (v2Im * v2AlongProjectedLine > dMaxLen)
+            continue; // or too far
+        int nZMSSD = Finder.ZMSSDAtPoint(kTarget.aLevels[nLevel].im, vIR[i]);
+        if (nZMSSD < nBestZMSSD)
+        {
+            nBest = i;
+            nBestZMSSD = nZMSSD;
+        }
+    }
 
-  m.Source = Measurement::SRC_EPIPOLAR;
-  m.v2RootPos = Finder.GetSubPixPos();
-  kTarget.mMeasurements[pNew] = m;
-  pNew->pMMData->sMeasurementKFs.insert(&kSrc);
-  pNew->pMMData->sMeasurementKFs.insert(&kTarget);
-  return true;
+    if (nBest == -1)
+        return false; // Nothing found.
+
+    //  Found a likely candidate along epipolar ray
+    Finder.MakeSubPixTemplate();
+    Finder.SetSubPixPos(LevelZeroPos(vIR[nBest], nLevel));
+    bool bSubPixConverges = Finder.IterateSubPixToConvergence(kTarget, 10);
+    if (!bSubPixConverges)
+        return false;
+
+    // Now triangulate the 3d point...
+    TooN::Vector<3> v3New;
+    v3New = kTarget.se3CfromW.inverse()
+            * ReprojectPoint(kSrc.se3CfromW * kTarget.se3CfromW.inverse(),
+                    mCamera.UnProject(v2RootPos),
+                    mCamera.UnProject(Finder.GetSubPixPos()));
+
+    MapPoint *pNew = new MapPoint;
+    pNew->v3WorldPos = v3New;
+    pNew->pMMData = new MapMakerData();
+
+    // Patch source stuff:
+    pNew->pPatchSourceKF = &kSrc;
+    pNew->nSourceLevel = nLevel;
+    pNew->v3Normal_NC = makeVector(0, 0, -1);
+    pNew->irCenter = irLevelPos;
+    pNew->v3Center_NC = unproject(mCamera.UnProject(v2RootPos));
+    pNew->v3OneRightFromCenter_NC = unproject(
+            mCamera.UnProject(v2RootPos + vec(ImageRef(nLevelScale, 0))));
+    pNew->v3OneDownFromCenter_NC = unproject(
+            mCamera.UnProject(v2RootPos + vec(ImageRef(0, nLevelScale))));
+
+    normalize(pNew->v3Center_NC);
+    normalize(pNew->v3OneDownFromCenter_NC);
+    normalize(pNew->v3OneRightFromCenter_NC);
+
+    pNew->RefreshPixelVectors();
+
+    mMap.vpPoints.push_back(pNew);
+    mqNewQueue.push(pNew);
+    Measurement m;
+    m.Source = Measurement::SRC_ROOT;
+    m.v2RootPos = v2RootPos;
+    m.nLevel = nLevel;
+    m.bSubPix = true;
+    kSrc.mMeasurements[pNew] = m;
+
+    m.Source = Measurement::SRC_EPIPOLAR;
+    m.v2RootPos = Finder.GetSubPixPos();
+    kTarget.mMeasurements[pNew] = m;
+    pNew->pMMData->sMeasurementKFs.insert(&kSrc);
+    pNew->pMMData->sMeasurementKFs.insert(&kTarget);
+    return true;
 }
 
 double MapMaker::KeyFrameLinearDist(KeyFrame &k1, KeyFrame &k2)
@@ -1112,40 +821,41 @@ double MapMaker::KeyFrameLinearDist(KeyFrame &k1, KeyFrame &k2)
     TooN::Vector<3> v3KF1_CamPos = k1.se3CfromW.inverse().get_translation();
     TooN::Vector<3> v3KF2_CamPos = k2.se3CfromW.inverse().get_translation();
     TooN::Vector<3> v3Diff = v3KF2_CamPos - v3KF1_CamPos;
-  double dDist = sqrt((double)(v3Diff * v3Diff));
-  return dDist;
+    double dDist = sqrt((double) (v3Diff * v3Diff));
+    return dDist;
 }
 
 vector<KeyFrame*> MapMaker::NClosestKeyFrames(KeyFrame &k, unsigned int N)
 {
-  vector<pair<double, KeyFrame* > > vKFandScores;
-  for(unsigned int i=0; i<mMap.vpKeyFrames.size(); i++)
+    vector<pair<double, KeyFrame*> > vKFandScores;
+    for (unsigned int i = 0; i < mMap.vpKeyFrames.size(); i++)
     {
-      if(mMap.vpKeyFrames[i] == &k)
-	continue;
-      double dDist = KeyFrameLinearDist(k, *mMap.vpKeyFrames[i]);
-      vKFandScores.push_back(make_pair(dDist, mMap.vpKeyFrames[i]));
+        if (mMap.vpKeyFrames[i] == &k)
+            continue;
+        double dDist = KeyFrameLinearDist(k, *mMap.vpKeyFrames[i]);
+        vKFandScores.push_back(make_pair(dDist, mMap.vpKeyFrames[i]));
     }
-  if(N > vKFandScores.size())
-    N = vKFandScores.size();
-  partial_sort(vKFandScores.begin(), vKFandScores.begin() + N, vKFandScores.end());
-  
-  vector<KeyFrame*> vResult;
-  for(unsigned int i=0; i<N; i++)
-    vResult.push_back(vKFandScores[i].second);
-  return vResult;
+    if (N > vKFandScores.size())
+        N = vKFandScores.size();
+    partial_sort(vKFandScores.begin(), vKFandScores.begin() + N,
+            vKFandScores.end());
+
+    vector<KeyFrame*> vResult;
+    for (unsigned int i = 0; i < N; i++)
+        vResult.push_back(vKFandScores[i].second);
+    return vResult;
 }
 
 KeyFrame* MapMaker::ClosestKeyFrame(KeyFrame &k)
 {
     double dClosestDist = 9999999999.9;
     int nClosest = -1;
-    for(unsigned int i=0; i<mMap.vpKeyFrames.size(); i++)
+    for (unsigned int i = 0; i < mMap.vpKeyFrames.size(); i++)
     {
-        if(mMap.vpKeyFrames[i] == &k)
+        if (mMap.vpKeyFrames[i] == &k)
             continue;
         double dDist = KeyFrameLinearDist(k, *mMap.vpKeyFrames[i]);
-        if(dDist < dClosestDist)
+        if (dDist < dClosestDist)
         {
             dClosestDist = dDist;
             nClosest = i;
@@ -1157,226 +867,230 @@ KeyFrame* MapMaker::ClosestKeyFrame(KeyFrame &k)
 
 double MapMaker::DistToNearestKeyFrame(KeyFrame &kCurrent)
 {
-  KeyFrame *pClosest = ClosestKeyFrame(kCurrent);
-  double dDist = KeyFrameLinearDist(kCurrent, *pClosest);
-  return dDist;
+    KeyFrame *pClosest = ClosestKeyFrame(kCurrent);
+    double dDist = KeyFrameLinearDist(kCurrent, *pClosest);
+    return dDist;
 }
 
 bool MapMaker::NeedNewKeyFrame(KeyFrame &kCurrent)
 {
-  KeyFrame *pClosest = ClosestKeyFrame(kCurrent);
-  double dDist = KeyFrameLinearDist(kCurrent, *pClosest);	// distance in PTAMS system.
-  lastMetricDist = dDist * currentScaleFactor;
-  lastWiggleDist = dDist / kCurrent.dSceneDepthMean;
+    KeyFrame *pClosest = ClosestKeyFrame(kCurrent);
+    double dDist = KeyFrameLinearDist(kCurrent, *pClosest); // distance in PTAMS system.
+    lastMetricDist = dDist * currentScaleFactor;
+    lastWiggleDist = dDist / kCurrent.dSceneDepthMean;
 
-  //cout << "PTAM metDist: " << lastMetricDist << " (min. " << minKFDist << ") wiggleDist: " << lastWiggleDist << " (min. " << minKFWiggleDist << ")"<<endl;
+    //cout << "PTAM metDist: " << lastMetricDist << " (min. " << minKFDist << ") wiggleDist: " << lastWiggleDist << " (min. " << minKFWiggleDist << ")"<<endl;
 
+    if (lastWiggleDist > minKFWiggleDist || lastMetricDist > minKFDist)
+    // Devesh
+    // if(lastWiggleDist > 0.05 || lastMetricDist > 0.15)
+    {
+        /*/
+         cerr << "Scale " << currentScaleFactor
+         << " dDist " << dDist
+         << " depth " << kCurrent.dSceneDepthMean
+         << " lastWiggleDist " << lastWiggleDist
+         << ", minKFWiggleDist " << minKFWiggleDist
+         << ", lastMetricDist " << lastMetricDist << ", minKFDist " << minKFDist << endl;
+         // */
 
-  if(lastWiggleDist > minKFWiggleDist || lastMetricDist > minKFDist)
-  // Devesh
-  // if(lastWiggleDist > 0.05 || lastMetricDist > 0.15)
-  {
-      /*/
-      cerr << "Scale " << currentScaleFactor 
-          << " dDist " << dDist
-          << " depth " << kCurrent.dSceneDepthMean
-          << " lastWiggleDist " << lastWiggleDist 
-          << ", minKFWiggleDist " << minKFWiggleDist
-          << ", lastMetricDist " << lastMetricDist << ", minKFDist " << minKFDist << endl;
-    // */
-
-
-    return true;
-  }
-  return false;
+        return true;
+    }
+    return false;
 }
 
 // Perform bundle adjustment on all keyframes, all map points
 void MapMaker::BundleAdjustAll()
 {
-  // construct the sets of kfs/points to be adjusted:
-  // in this case, all of them
-  set<KeyFrame*> sAdj;
-  set<KeyFrame*> sFixed;
-  for(unsigned int i=0; i<mMap.vpKeyFrames.size(); i++)
-    if(mMap.vpKeyFrames[i]->bFixed)
-      sFixed.insert(mMap.vpKeyFrames[i]);
-    else
-      sAdj.insert(mMap.vpKeyFrames[i]);
-  
-  set<MapPoint*> sMapPoints;
-  for(unsigned int i=0; i<mMap.vpPoints.size();i++)
-    sMapPoints.insert(mMap.vpPoints[i]);
-  
-  BundleAdjust(sAdj, sFixed, sMapPoints, false);
+    // construct the sets of kfs/points to be adjusted:
+    // in this case, all of them
+    set<KeyFrame*> sAdj;
+    set<KeyFrame*> sFixed;
+    for (unsigned int i = 0; i < mMap.vpKeyFrames.size(); i++)
+        if (mMap.vpKeyFrames[i]->bFixed)
+            sFixed.insert(mMap.vpKeyFrames[i]);
+        else
+            sAdj.insert(mMap.vpKeyFrames[i]);
+
+    set<MapPoint*> sMapPoints;
+    for (unsigned int i = 0; i < mMap.vpPoints.size(); i++)
+        sMapPoints.insert(mMap.vpPoints[i]);
+
+    BundleAdjust(sAdj, sFixed, sMapPoints, false);
 }
 
 // Peform a local bundle adjustment which only adjusts
 // recently added key-frames
 void MapMaker::BundleAdjustRecent()
 {
-  if(mMap.vpKeyFrames.size() < 8)  
+    if (mMap.vpKeyFrames.size() < 8)
     { // Ignore this unless map is big enough
-      mbBundleConverged_Recent = true;
-      return;
+        mbBundleConverged_Recent = true;
+        return;
     }
 
-  // First, make a list of the keyframes we want adjusted in the adjuster.
-  // This will be the last keyframe inserted, and its four nearest neighbors
-  set<KeyFrame*> sAdjustSet;
-  KeyFrame *pkfNewest = mMap.vpKeyFrames.back();
-  sAdjustSet.insert(pkfNewest);
-  vector<KeyFrame*> vClosest = NClosestKeyFrames(*pkfNewest, 4);
-  for(int i=0; i<4; i++)
-    if(vClosest[i]->bFixed == false)
-      sAdjustSet.insert(vClosest[i]);
-  
-  // Now we find the set of features which they contain.
-  set<MapPoint*> sMapPoints;
-  for(set<KeyFrame*>::iterator iter = sAdjustSet.begin();
-      iter!=sAdjustSet.end();
-      iter++)
+    // First, make a list of the keyframes we want adjusted in the adjuster.
+    // This will be the last keyframe inserted, and its four nearest neighbors
+    set<KeyFrame*> sAdjustSet;
+    KeyFrame *pkfNewest = mMap.vpKeyFrames.back();
+    sAdjustSet.insert(pkfNewest);
+    vector<KeyFrame*> vClosest = NClosestKeyFrames(*pkfNewest, 4);
+    for (int i = 0; i < 4; i++)
+        if (vClosest[i]->bFixed == false)
+            sAdjustSet.insert(vClosest[i]);
+
+    // Now we find the set of features which they contain.
+    set<MapPoint*> sMapPoints;
+    for (set<KeyFrame*>::iterator iter = sAdjustSet.begin();
+            iter != sAdjustSet.end(); iter++)
     {
-      map<MapPoint*,Measurement> &mKFMeas = (*iter)->mMeasurements;
-      for(meas_it jiter = mKFMeas.begin(); jiter!= mKFMeas.end(); jiter++)
-	sMapPoints.insert(jiter->first);
+        map<MapPoint*, Measurement> &mKFMeas = (*iter)->mMeasurements;
+        for (meas_it jiter = mKFMeas.begin(); jiter != mKFMeas.end(); jiter++)
+            sMapPoints.insert(jiter->first);
     };
-  
-  // Finally, add all keyframes which measure above points as fixed keyframes
-  set<KeyFrame*> sFixedSet;
-  for(vector<KeyFrame*>::iterator it = mMap.vpKeyFrames.begin(); it!=mMap.vpKeyFrames.end(); it++)
+
+    // Finally, add all keyframes which measure above points as fixed keyframes
+    set<KeyFrame*> sFixedSet;
+    for (vector<KeyFrame*>::iterator it = mMap.vpKeyFrames.begin();
+            it != mMap.vpKeyFrames.end(); it++)
     {
-      if(sAdjustSet.count(*it))
-	continue;
-      bool bInclude = false;
-      for(meas_it jiter = (*it)->mMeasurements.begin(); jiter!= (*it)->mMeasurements.end(); jiter++)
-	if(sMapPoints.count(jiter->first))
-	  {
-	    bInclude = true;
-	    break;
-	  }
-      if(bInclude)
-	sFixedSet.insert(*it);
+        if (sAdjustSet.count(*it))
+            continue;
+        bool bInclude = false;
+        for (meas_it jiter = (*it)->mMeasurements.begin();
+                jiter != (*it)->mMeasurements.end(); jiter++)
+            if (sMapPoints.count(jiter->first))
+            {
+                bInclude = true;
+                break;
+            }
+        if (bInclude)
+            sFixedSet.insert(*it);
     }
-  
-  BundleAdjust(sAdjustSet, sFixedSet, sMapPoints, true);
+
+    BundleAdjust(sAdjustSet, sFixedSet, sMapPoints, true);
 }
 
 // Common bundle adjustment code. This creates a bundle-adjust instance, populates it, and runs it.
-void MapMaker::BundleAdjust(set<KeyFrame*> sAdjustSet, set<KeyFrame*> sFixedSet, set<MapPoint*> sMapPoints, bool bRecent)
+void MapMaker::BundleAdjust(set<KeyFrame*> sAdjustSet, set<KeyFrame*> sFixedSet,
+        set<MapPoint*> sMapPoints, bool bRecent)
 {
-  Bundle b(mCamera);   // Our bundle adjuster
-  mbBundleRunning = true;
-  mbBundleRunningIsRecent = bRecent;
-  
-  // The bundle adjuster does different accounting of keyframes and map points;
-  // Translation maps are stored:
-  map<MapPoint*, int> mPoint_BundleID;
-  map<int, MapPoint*> mBundleID_Point;
-  map<KeyFrame*, int> mView_BundleID;
-  map<int, KeyFrame*> mBundleID_View;
-  
-  // Add the keyframes' poses to the bundle adjuster. Two parts: first nonfixed, then fixed.
-  for(set<KeyFrame*>::iterator it = sAdjustSet.begin(); it!= sAdjustSet.end(); it++)
+    Bundle b(mCamera); // Our bundle adjuster
+    mbBundleRunning = true;
+    mbBundleRunningIsRecent = bRecent;
+
+    // The bundle adjuster does different accounting of keyframes and map points;
+    // Translation maps are stored:
+    map<MapPoint*, int> mPoint_BundleID;
+    map<int, MapPoint*> mBundleID_Point;
+    map<KeyFrame*, int> mView_BundleID;
+    map<int, KeyFrame*> mBundleID_View;
+
+    // Add the keyframes' poses to the bundle adjuster. Two parts: first nonfixed, then fixed.
+    for (set<KeyFrame*>::iterator it = sAdjustSet.begin();
+            it != sAdjustSet.end(); it++)
     {
-      int nBundleID = b.AddCamera((*it)->se3CfromW, (*it)->bFixed);
-      mView_BundleID[*it] = nBundleID;
-      mBundleID_View[nBundleID] = *it;
+        int nBundleID = b.AddCamera((*it)->se3CfromW, (*it)->bFixed);
+        mView_BundleID[*it] = nBundleID;
+        mBundleID_View[nBundleID] = *it;
     }
-  for(set<KeyFrame*>::iterator it = sFixedSet.begin(); it!= sFixedSet.end(); it++)
+    for (set<KeyFrame*>::iterator it = sFixedSet.begin(); it != sFixedSet.end();
+            it++)
     {
-      int nBundleID = b.AddCamera((*it)->se3CfromW, true);
-      mView_BundleID[*it] = nBundleID;
-      mBundleID_View[nBundleID] = *it;
-    }
-  
-  // Add the points' 3D position
-  for(set<MapPoint*>::iterator it = sMapPoints.begin(); it!=sMapPoints.end(); it++)
-    {
-      int nBundleID = b.AddPoint((*it)->v3WorldPos);
-      mPoint_BundleID[*it] = nBundleID;
-      mBundleID_Point[nBundleID] = *it;
-    }
-  
-  // Add the relevant point-in-keyframe measurements
-  for(unsigned int i=0; i<mMap.vpKeyFrames.size(); i++)
-    {
-      if(mView_BundleID.count(mMap.vpKeyFrames[i]) == 0)
-	continue;
-      
-      int nKF_BundleID = mView_BundleID[mMap.vpKeyFrames[i]];
-      for(meas_it it= mMap.vpKeyFrames[i]->mMeasurements.begin();
-	  it!= mMap.vpKeyFrames[i]->mMeasurements.end();
-	  it++)
-	{
-	  if(mPoint_BundleID.count(it->first) == 0)
-	    continue;
-	  int nPoint_BundleID = mPoint_BundleID[it->first];
-	  b.AddMeas(nKF_BundleID, nPoint_BundleID, it->second.v2RootPos, LevelScale(it->second.nLevel) * LevelScale(it->second.nLevel));
-	}
-    }
-  
-  // Run the bundle adjuster. This returns the number of successful iterations
-  int nAccepted = b.Compute(&mbBundleAbortRequested);
-  
-  if(nAccepted < 0)
-    {
-      // Crap: - LM Ran into a serious problem!
-      // This is probably because the initial stereo was messed up.
-      // Get rid of this map and start again! 
-      cout << "!! MapMaker: Cholesky failure in bundle adjust. " << endl
-	   << "   The map is probably corrupt: Ditching the map. " << endl;
-      mbResetRequested = true;
-      return;
+        int nBundleID = b.AddCamera((*it)->se3CfromW, true);
+        mView_BundleID[*it] = nBundleID;
+        mBundleID_View[nBundleID] = *it;
     }
 
-  // Bundle adjustment did some updates, apply these to the map
-  if(nAccepted > 0)
+    // Add the points' 3D position
+    for (set<MapPoint*>::iterator it = sMapPoints.begin();
+            it != sMapPoints.end(); it++)
     {
-      
-      for(map<MapPoint*,int>::iterator itr = mPoint_BundleID.begin();
-	  itr!=mPoint_BundleID.end();
-	  itr++)
-	itr->first->v3WorldPos = b.GetPoint(itr->second);
-      
-      for(map<KeyFrame*,int>::iterator itr = mView_BundleID.begin();
-	  itr!=mView_BundleID.end();
-	  itr++)
-	itr->first->se3CfromW = b.GetCamera(itr->second);
-      if(bRecent)
-	mbBundleConverged_Recent = false;
-      mbBundleConverged_Full = false;
-    };
-  
-  if(b.Converged())
-    {
-      mbBundleConverged_Recent = true;
-      if(!bRecent)
-	mbBundleConverged_Full = true;
+        int nBundleID = b.AddPoint((*it)->v3WorldPos);
+        mPoint_BundleID[*it] = nBundleID;
+        mBundleID_Point[nBundleID] = *it;
     }
-  
-  mbBundleRunning = false;
-  mbBundleAbortRequested = false;
-  
-  // Handle outlier measurements:
-  vector<pair<int,int> > vOutliers_PC_pair = b.GetOutlierMeasurements();
-  for(unsigned int i=0; i<vOutliers_PC_pair.size(); i++)
+
+    // Add the relevant point-in-keyframe measurements
+    for (unsigned int i = 0; i < mMap.vpKeyFrames.size(); i++)
     {
-      MapPoint *pp = mBundleID_Point[vOutliers_PC_pair[i].first];
-      KeyFrame *pk = mBundleID_View[vOutliers_PC_pair[i].second];
-      Measurement &m = pk->mMeasurements[pp];
-      if(pp->pMMData->GoodMeasCount() <= 2 || m.Source == Measurement::SRC_ROOT)   // Is the original source kf considered an outlier? That's bad.
-	pp->bBad = true;
-      else
-	{
-	  // Do we retry it? Depends where it came from!!
-	  if(m.Source == Measurement::SRC_TRACKER || m.Source == Measurement::SRC_EPIPOLAR)
-	    mvFailureQueue.push_back(pair<KeyFrame*,MapPoint*>(pk,pp));
-	  else
-	    pp->pMMData->sNeverRetryKFs.insert(pk);
-	  pk->mMeasurements.erase(pp);
-	  pp->pMMData->sMeasurementKFs.erase(pk);
-	}
+        if (mView_BundleID.count(mMap.vpKeyFrames[i]) == 0)
+            continue;
+
+        int nKF_BundleID = mView_BundleID[mMap.vpKeyFrames[i]];
+        for (meas_it it = mMap.vpKeyFrames[i]->mMeasurements.begin();
+                it != mMap.vpKeyFrames[i]->mMeasurements.end(); it++)
+        {
+            if (mPoint_BundleID.count(it->first) == 0)
+                continue;
+            int nPoint_BundleID = mPoint_BundleID[it->first];
+            b.AddMeas(nKF_BundleID, nPoint_BundleID, it->second.v2RootPos,
+                    LevelScale(it->second.nLevel)
+                            * LevelScale(it->second.nLevel));
+        }
+    }
+
+    // Run the bundle adjuster. This returns the number of successful iterations
+    int nAccepted = b.Compute(&mbBundleAbortRequested);
+
+    if (nAccepted < 0)
+    {
+        // Crap: - LM Ran into a serious problem!
+        // This is probably because the initial stereo was messed up.
+        // Get rid of this map and start again!
+        cout << "!! MapMaker: Cholesky failure in bundle adjust. " << endl
+                << "   The map is probably corrupt: Ditching the map. " << endl;
+        mbResetRequested = true;
+        return;
+    }
+
+    // Bundle adjustment did some updates, apply these to the map
+    if (nAccepted > 0)
+    {
+
+        for (map<MapPoint*, int>::iterator itr = mPoint_BundleID.begin();
+                itr != mPoint_BundleID.end(); itr++)
+            itr->first->v3WorldPos = b.GetPoint(itr->second);
+
+        for (map<KeyFrame*, int>::iterator itr = mView_BundleID.begin();
+                itr != mView_BundleID.end(); itr++)
+            itr->first->se3CfromW = b.GetCamera(itr->second);
+        if (bRecent)
+            mbBundleConverged_Recent = false;
+        mbBundleConverged_Full = false;
+    };
+
+    if (b.Converged())
+    {
+        mbBundleConverged_Recent = true;
+        if (!bRecent)
+            mbBundleConverged_Full = true;
+    }
+
+    mbBundleRunning = false;
+    mbBundleAbortRequested = false;
+
+    // Handle outlier measurements:
+    vector<pair<int, int> > vOutliers_PC_pair = b.GetOutlierMeasurements();
+    for (unsigned int i = 0; i < vOutliers_PC_pair.size(); i++)
+    {
+        MapPoint *pp = mBundleID_Point[vOutliers_PC_pair[i].first];
+        KeyFrame *pk = mBundleID_View[vOutliers_PC_pair[i].second];
+        Measurement &m = pk->mMeasurements[pp];
+        if (pp->pMMData->GoodMeasCount() <= 2
+                || m.Source == Measurement::SRC_ROOT) // Is the original source kf considered an outlier? That's bad.
+            pp->bBad = true;
+        else
+        {
+            // Do we retry it? Depends where it came from!!
+            if (m.Source == Measurement::SRC_TRACKER
+                    || m.Source == Measurement::SRC_EPIPOLAR)
+                mvFailureQueue.push_back(pair<KeyFrame*, MapPoint*>(pk, pp));
+            else
+                pp->pMMData->sNeverRetryKFs.insert(pk);
+            pk->mMeasurements.erase(pp);
+            pp->pMMData->sMeasurementKFs.erase(pk);
+        }
     }
 }
 
@@ -1387,247 +1101,256 @@ void MapMaker::BundleAdjust(set<KeyFrame*> sAdjustSet, set<KeyFrame*> sFixedSet,
 // TrackerData.h.
 bool MapMaker::ReFind_Common(KeyFrame &k, MapPoint &p)
 {
-  // abort if either a measurement is already in the map, or we've
-  // decided that this point-kf combo is beyond redemption
-  if(p.pMMData->sMeasurementKFs.count(&k)
-     || p.pMMData->sNeverRetryKFs.count(&k))
-    return false;
-  
-  static PatchFinder Finder;
-  TooN::Vector<3> v3Cam = k.se3CfromW*p.v3WorldPos;
-  if(v3Cam[2] < 0.001)
+    // abort if either a measurement is already in the map, or we've
+    // decided that this point-kf combo is beyond redemption
+    if (p.pMMData->sMeasurementKFs.count(&k)
+            || p.pMMData->sNeverRetryKFs.count(&k))
+        return false;
+
+    static PatchFinder Finder;
+    TooN::Vector<3> v3Cam = k.se3CfromW * p.v3WorldPos;
+    if (v3Cam[2] < 0.001)
     {
-      p.pMMData->sNeverRetryKFs.insert(&k);
-      return false;
+        p.pMMData->sNeverRetryKFs.insert(&k);
+        return false;
     }
-  TooN::Vector<2> v2ImPlane = project(v3Cam);
-  if(v2ImPlane* v2ImPlane > mCamera.LargestRadiusInImage() * mCamera.LargestRadiusInImage())
+    TooN::Vector<2> v2ImPlane = project(v3Cam);
+    if (v2ImPlane * v2ImPlane
+            > mCamera.LargestRadiusInImage() * mCamera.LargestRadiusInImage())
     {
-      p.pMMData->sNeverRetryKFs.insert(&k);
-      return false;
-    }
-  
-  TooN::Vector<2> v2Image = mCamera.Project(v2ImPlane);
-  if(mCamera.Invalid())
-    {
-      p.pMMData->sNeverRetryKFs.insert(&k);
-      return false;
+        p.pMMData->sNeverRetryKFs.insert(&k);
+        return false;
     }
 
-  ImageRef irImageSize = k.aLevels[0].im.size();
-  if(v2Image[0] < 0 || v2Image[1] < 0 || v2Image[0] > irImageSize[0] || v2Image[1] > irImageSize[1])
+    TooN::Vector<2> v2Image = mCamera.Project(v2ImPlane);
+    if (mCamera.Invalid())
     {
-      p.pMMData->sNeverRetryKFs.insert(&k);
-      return false;
+        p.pMMData->sNeverRetryKFs.insert(&k);
+        return false;
     }
-  
-  Matrix<2> m2CamDerivs = mCamera.GetProjectionDerivs();
-  Finder.MakeTemplateCoarse(p, k.se3CfromW, m2CamDerivs);
-  
-  if(Finder.TemplateBad())
+
+    ImageRef irImageSize = k.aLevels[0].im.size();
+    if (v2Image[0] < 0 || v2Image[1] < 0 || v2Image[0] > irImageSize[0]
+            || v2Image[1] > irImageSize[1])
     {
-      p.pMMData->sNeverRetryKFs.insert(&k);
-      return false;
+        p.pMMData->sNeverRetryKFs.insert(&k);
+        return false;
     }
-  
-  bool bFound = Finder.FindPatchCoarse(ir(v2Image), k, 4);  // Very tight search radius!
-  if(!bFound)
+
+    Matrix<2> m2CamDerivs = mCamera.GetProjectionDerivs();
+    Finder.MakeTemplateCoarse(p, k.se3CfromW, m2CamDerivs);
+
+    if (Finder.TemplateBad())
     {
-      p.pMMData->sNeverRetryKFs.insert(&k);
-      return false;
+        p.pMMData->sNeverRetryKFs.insert(&k);
+        return false;
     }
-  
-  // If we found something, generate a measurement struct and put it in the map
-  Measurement m;
-  m.nLevel = Finder.GetLevel();
-  m.Source = Measurement::SRC_REFIND;
-  
-  if(Finder.GetLevel() > 0)
+
+    bool bFound = Finder.FindPatchCoarse(ir(v2Image), k, 4); // Very tight search radius!
+    if (!bFound)
     {
-      Finder.MakeSubPixTemplate();
-      Finder.IterateSubPixToConvergence(k,8);
-      m.v2RootPos = Finder.GetSubPixPos();
-      m.bSubPix = true;
+        p.pMMData->sNeverRetryKFs.insert(&k);
+        return false;
     }
-  else
+
+    // If we found something, generate a measurement struct and put it in the map
+    Measurement m;
+    m.nLevel = Finder.GetLevel();
+    m.Source = Measurement::SRC_REFIND;
+
+    if (Finder.GetLevel() > 0)
     {
-      m.v2RootPos = Finder.GetCoarsePosAsVector();
-      m.bSubPix = false;
+        Finder.MakeSubPixTemplate();
+        Finder.IterateSubPixToConvergence(k, 8);
+        m.v2RootPos = Finder.GetSubPixPos();
+        m.bSubPix = true;
+    }
+    else
+    {
+        m.v2RootPos = Finder.GetCoarsePosAsVector();
+        m.bSubPix = false;
     };
-  
-  if(k.mMeasurements.count(&p))
+
+    if (k.mMeasurements.count(&p))
     {
-      assert(0); // This should never happen, we checked for this at the start.
+        assert(0);
+        // This should never happen, we checked for this at the start.
     }
-  k.mMeasurements[&p] = m;
-  p.pMMData->sMeasurementKFs.insert(&k);
-  return true;
+    k.mMeasurements[&p] = m;
+    p.pMMData->sMeasurementKFs.insert(&k);
+    return true;
 }
 
 // A general data-association update for a single keyframe
 // Do this on a new key-frame when it's passed in by the tracker
 int MapMaker::ReFindInSingleKeyFrame(KeyFrame &k)
 {
-  vector<MapPoint*> vToFind;
-  for(unsigned int i=0; i<mMap.vpPoints.size(); i++)
-    vToFind.push_back(mMap.vpPoints[i]);
-  
-  int nFoundNow = 0;
-  for(unsigned int i=0; i<vToFind.size(); i++)
-    if(ReFind_Common(k,*vToFind[i]))
-      nFoundNow++;
+    vector<MapPoint*> vToFind;
+    for (unsigned int i = 0; i < mMap.vpPoints.size(); i++)
+        vToFind.push_back(mMap.vpPoints[i]);
 
-  return nFoundNow;
-};
+    int nFoundNow = 0;
+    for (unsigned int i = 0; i < vToFind.size(); i++)
+        if (ReFind_Common(k, *vToFind[i]))
+            nFoundNow++;
+
+    return nFoundNow;
+}
+;
 
 // When new map points are generated, they're only created from a stereo pair
 // this tries to make additional measurements in other KFs which they might
 // be in.
 void MapMaker::ReFindNewlyMade()
 {
-  if(mqNewQueue.empty())
-    return;
-  int nFound = 0;
-  int nBad = 0;
-  while(!mqNewQueue.empty() && mvpKeyFrameQueue.size() == 0)
+    if (mqNewQueue.empty())
+        return;
+    int nFound = 0;
+    int nBad = 0;
+    while (!mqNewQueue.empty() && mvpKeyFrameQueue.size() == 0)
     {
-      MapPoint* pNew = mqNewQueue.front();
-      mqNewQueue.pop();
-      if(pNew->bBad)
-	{
-	  nBad++;
-	  continue;
-	}
-      for(unsigned int i=0; i<mMap.vpKeyFrames.size(); i++)
-	if(ReFind_Common(*mMap.vpKeyFrames[i], *pNew))
-	  nFound++;
+        MapPoint* pNew = mqNewQueue.front();
+        mqNewQueue.pop();
+        if (pNew->bBad)
+        {
+            nBad++;
+            continue;
+        }
+        for (unsigned int i = 0; i < mMap.vpKeyFrames.size(); i++)
+            if (ReFind_Common(*mMap.vpKeyFrames[i], *pNew))
+                nFound++;
     }
-};
+}
+;
 
 // Dud measurements get a second chance.
 void MapMaker::ReFindFromFailureQueue()
 {
-  if(mvFailureQueue.size() == 0)
-    return;
-  sort(mvFailureQueue.begin(), mvFailureQueue.end());
-  vector<pair<KeyFrame*, MapPoint*> >::iterator it;
-  int nFound=0;
-  for(it = mvFailureQueue.begin(); it!=mvFailureQueue.end(); it++)
-    if(ReFind_Common(*it->first, *it->second))
-      nFound++;
-  
-  mvFailureQueue.erase(mvFailureQueue.begin(), it);
-};
+    if (mvFailureQueue.size() == 0)
+        return;
+    sort(mvFailureQueue.begin(), mvFailureQueue.end());
+    vector<pair<KeyFrame*, MapPoint*> >::iterator it;
+    int nFound = 0;
+    for (it = mvFailureQueue.begin(); it != mvFailureQueue.end(); it++)
+        if (ReFind_Common(*it->first, *it->second))
+            nFound++;
+
+    mvFailureQueue.erase(mvFailureQueue.begin(), it);
+}
+;
 
 // Is the tracker's camera pose in cloud-cuckoo land?
 bool MapMaker::IsDistanceToNearestKeyFrameExcessive(KeyFrame &kCurrent)
 {
-  return DistToNearestKeyFrame(kCurrent) > mdWiggleScale * 10.0;
+    return DistToNearestKeyFrame(kCurrent) > mdWiggleScale * 10.0;
 }
 
 // Find a dominant plane in the map, find an SE3<> to put it as the z=0 plane
 SE3<> MapMaker::CalcPlaneAligner()
 {
-  unsigned int nPoints = mMap.vpPoints.size();
-  if(nPoints < 10)
+    unsigned int nPoints = mMap.vpPoints.size();
+    if (nPoints < 10)
     {
-      cout << "  MapMaker: CalcPlane: too few points to calc plane." << endl;
-      return SE3<>();
+        cout << "  MapMaker: CalcPlane: too few points to calc plane." << endl;
+        return SE3<>();
     };
-  
-  int nRansacs = GV2.GetInt("MapMaker.PlaneAlignerRansacs", 100, HIDDEN|SILENT);
-  TooN::Vector<3> v3BestMean;
-  TooN::Vector<3> v3BestNormal;
-  double dBestDistSquared = 9999999999999999.9;
-  
-  for(int i=0; i<nRansacs; i++)
+
+    int nRansacs = GV2.GetInt("MapMaker.PlaneAlignerRansacs", 100,
+            HIDDEN | SILENT);
+    TooN::Vector<3> v3BestMean;
+    TooN::Vector<3> v3BestNormal;
+    double dBestDistSquared = 9999999999999999.9;
+
+    for (int i = 0; i < nRansacs; i++)
     {
-      int nA = rand()%nPoints;
-      int nB = nA;
-      int nC = nA;
-      while(nB == nA)
-	nB = rand()%nPoints;
-      while(nC == nA || nC==nB)
-	nC = rand()%nPoints;
-      
-      TooN::Vector<3> v3Mean = 0.33333333 * (mMap.vpPoints[nA]->v3WorldPos + 
-				       mMap.vpPoints[nB]->v3WorldPos + 
-				       mMap.vpPoints[nC]->v3WorldPos);
-      
-      TooN::Vector<3> v3CA = mMap.vpPoints[nC]->v3WorldPos  - mMap.vpPoints[nA]->v3WorldPos;
-      TooN::Vector<3> v3BA = mMap.vpPoints[nB]->v3WorldPos  - mMap.vpPoints[nA]->v3WorldPos;
-      TooN::Vector<3> v3Normal = v3CA ^ v3BA;
-      if(v3Normal * v3Normal  == 0)
-	continue;
-      normalize(v3Normal);
-      
-      double dSumError = 0.0;
-      for(unsigned int i=0; i<nPoints; i++)
-	{
-        TooN::Vector<3> v3Diff = mMap.vpPoints[i]->v3WorldPos - v3Mean;
-	  double dDistSq = v3Diff * v3Diff;
-	  if(dDistSq == 0.0)
-	    continue;
-	  double dNormDist = fabs((double)(v3Diff * v3Normal));
-	  
-	  if(dNormDist > 0.05)
-	    dNormDist = 0.05;
-	  dSumError += dNormDist;
-	}
-      if(dSumError < dBestDistSquared)
-	{
-	  dBestDistSquared = dSumError;
-	  v3BestMean = v3Mean;
-	  v3BestNormal = v3Normal;
-	}
+        int nA = rand() % nPoints;
+        int nB = nA;
+        int nC = nA;
+        while (nB == nA)
+            nB = rand() % nPoints;
+        while (nC == nA || nC == nB)
+            nC = rand() % nPoints;
+
+        TooN::Vector<3> v3Mean = 0.33333333
+                * (mMap.vpPoints[nA]->v3WorldPos + mMap.vpPoints[nB]->v3WorldPos
+                        + mMap.vpPoints[nC]->v3WorldPos);
+
+        TooN::Vector<3> v3CA = mMap.vpPoints[nC]->v3WorldPos
+                - mMap.vpPoints[nA]->v3WorldPos;
+        TooN::Vector<3> v3BA = mMap.vpPoints[nB]->v3WorldPos
+                - mMap.vpPoints[nA]->v3WorldPos;
+        TooN::Vector<3> v3Normal = v3CA ^ v3BA;
+        if (v3Normal * v3Normal == 0)
+            continue;
+        normalize(v3Normal);
+
+        double dSumError = 0.0;
+        for (unsigned int i = 0; i < nPoints; i++)
+        {
+            TooN::Vector<3> v3Diff = mMap.vpPoints[i]->v3WorldPos - v3Mean;
+            double dDistSq = v3Diff * v3Diff;
+            if (dDistSq == 0.0)
+                continue;
+            double dNormDist = fabs((double) (v3Diff * v3Normal));
+
+            if (dNormDist > 0.05)
+                dNormDist = 0.05;
+            dSumError += dNormDist;
+        }
+        if (dSumError < dBestDistSquared)
+        {
+            dBestDistSquared = dSumError;
+            v3BestMean = v3Mean;
+            v3BestNormal = v3Normal;
+        }
     }
-  
-  // Done the ransacs, now collect the supposed inlier set
-  vector<TooN::Vector<3> > vv3Inliers;
-  for(unsigned int i=0; i<nPoints; i++)
+
+    // Done the ransacs, now collect the supposed inlier set
+    vector<TooN::Vector<3> > vv3Inliers;
+    for (unsigned int i = 0; i < nPoints; i++)
     {
         TooN::Vector<3> v3Diff = mMap.vpPoints[i]->v3WorldPos - v3BestMean;
-      double dDistSq = v3Diff * v3Diff;
-      if(dDistSq == 0.0)
-	continue;
-      double dNormDist = fabs((double)(v3Diff * v3BestNormal));
-      if(dNormDist < 0.05)
-	vv3Inliers.push_back(mMap.vpPoints[i]->v3WorldPos);
+        double dDistSq = v3Diff * v3Diff;
+        if (dDistSq == 0.0)
+            continue;
+        double dNormDist = fabs((double) (v3Diff * v3BestNormal));
+        if (dNormDist < 0.05)
+            vv3Inliers.push_back(mMap.vpPoints[i]->v3WorldPos);
     }
-  
-  // With these inliers, calculate mean and cov
-  TooN::Vector<3> v3MeanOfInliers = Zeros;
-  for(unsigned int i=0; i<vv3Inliers.size(); i++)
-    v3MeanOfInliers+=vv3Inliers[i];
-  v3MeanOfInliers *= (1.0 / vv3Inliers.size());
-  
-  Matrix<3> m3Cov = Zeros;
-  for(unsigned int i=0; i<vv3Inliers.size(); i++)
+
+    // With these inliers, calculate mean and cov
+    TooN::Vector<3> v3MeanOfInliers = Zeros;
+    for (unsigned int i = 0; i < vv3Inliers.size(); i++)
+        v3MeanOfInliers += vv3Inliers[i];
+    v3MeanOfInliers *= (1.0 / vv3Inliers.size());
+
+    Matrix<3> m3Cov = Zeros;
+    for (unsigned int i = 0; i < vv3Inliers.size(); i++)
     {
         TooN::Vector<3> v3Diff = vv3Inliers[i] - v3MeanOfInliers;
-      m3Cov += v3Diff.as_col() * v3Diff.as_row();
+        m3Cov += v3Diff.as_col() * v3Diff.as_row();
     };
-  
-  // Find the principal component with the minimal variance: this is the plane normal
-  SymEigen<3> sym(m3Cov);
-  TooN::Vector<3> v3Normal = sym.get_evectors()[0];
-  
-  // Use the version of the normal which points towards the cam center
-  if(v3Normal[2] > 0)
-    v3Normal *= -1.0;
-  
-  Matrix<3> m3Rot = Identity;
-  m3Rot[2] = v3Normal;
-  m3Rot[0] = m3Rot[0] - (v3Normal * (m3Rot[0] * v3Normal));
-  normalize(m3Rot[0]);
-  m3Rot[1] = m3Rot[2] ^ m3Rot[0];
-  
-  SE3<> se3Aligner;
-  se3Aligner.get_rotation() = m3Rot;
-  TooN::Vector<3> v3RMean = se3Aligner * v3MeanOfInliers;
-  se3Aligner.get_translation() = -v3RMean;
-  
-  return se3Aligner;
+
+    // Find the principal component with the minimal variance: this is the plane normal
+    SymEigen<3> sym(m3Cov);
+    TooN::Vector<3> v3Normal = sym.get_evectors()[0];
+
+    // Use the version of the normal which points towards the cam center
+    if (v3Normal[2] > 0)
+        v3Normal *= -1.0;
+
+    Matrix<3> m3Rot = Identity;
+    m3Rot[2] = v3Normal;
+    m3Rot[0] = m3Rot[0] - (v3Normal * (m3Rot[0] * v3Normal));
+    normalize(m3Rot[0]);
+    m3Rot[1] = m3Rot[2] ^ m3Rot[0];
+
+    SE3<> se3Aligner;
+    se3Aligner.get_rotation() = m3Rot;
+    TooN::Vector<3> v3RMean = se3Aligner * v3MeanOfInliers;
+    se3Aligner.get_translation() = -v3RMean;
+
+    return se3Aligner;
 }
 
 // Calculates the depth(z-) distribution of map points visible in a keyframe
@@ -1635,145 +1358,143 @@ SE3<> MapMaker::CalcPlaneAligner()
 // get this filled in by the tracker
 void MapMaker::RefreshSceneDepth(KeyFrame *pKF)
 {
-  double dSumDepth = 0.0;
-  double dSumDepthSquared = 0.0;
-  int nMeas = 0;
-  for(meas_it it = pKF->mMeasurements.begin(); it!=pKF->mMeasurements.end(); it++)
+    double dSumDepth = 0.0;
+    double dSumDepthSquared = 0.0;
+    int nMeas = 0;
+    for (meas_it it = pKF->mMeasurements.begin();
+            it != pKF->mMeasurements.end(); it++)
     {
-      MapPoint &point = *it->first;
-      TooN::Vector<3> v3PosK = pKF->se3CfromW * point.v3WorldPos;
-      dSumDepth += v3PosK[2];
-      dSumDepthSquared += v3PosK[2] * v3PosK[2];
-      nMeas++;
+        MapPoint &point = *it->first;
+        TooN::Vector<3> v3PosK = pKF->se3CfromW * point.v3WorldPos;
+        dSumDepth += v3PosK[2];
+        dSumDepthSquared += v3PosK[2] * v3PosK[2];
+        nMeas++;
     }
- 
-  assert(nMeas > 2); // If not then something is seriously wrong with this KF!!
-  pKF->dSceneDepthMean = dSumDepth / nMeas;
-  pKF->dSceneDepthSigma = sqrt((dSumDepthSquared / nMeas) - (pKF->dSceneDepthMean) * (pKF->dSceneDepthMean));
+
+    assert(nMeas > 2);
+    // If not then something is seriously wrong with this KF!!
+    pKF->dSceneDepthMean = dSumDepth / nMeas;
+    pKF->dSceneDepthSigma = sqrt(
+            (dSumDepthSquared / nMeas)
+                    - (pKF->dSceneDepthMean) * (pKF->dSceneDepthMean));
 }
 
 void MapMaker::GUICommandCallBack(void* ptr, string sCommand, string sParams)
 {
-  Command c;
-  c.sCommand = sCommand;
-  c.sParams = sParams;
-  ((MapMaker*) ptr)->mvQueuedCommands.push_back(c);
+    Command c;
+    c.sCommand = sCommand;
+    c.sParams = sParams;
+    ((MapMaker*) ptr)->mvQueuedCommands.push_back(c);
 }
 
-void MapMaker::GUICommandHandler(string sCommand, string sParams)  // Called by the callback func..
+void MapMaker::GUICommandHandler(string sCommand, string sParams) // Called by the callback func..
 {
-  if(sCommand=="SaveMap")
+    if (sCommand == "SaveMap")
     {
-      cout << "  MapMaker: Saving the map.... " << endl;
-      ofstream ofs("map.dump");
-      for(unsigned int i=0; i<mMap.vpPoints.size(); i++)
-	{
-	  ofs << mMap.vpPoints[i]->v3WorldPos << "  ";
-	  ofs << mMap.vpPoints[i]->nSourceLevel << endl;
-	}
-      ofs.close();
-      
-      for(unsigned int i=0; i<mMap.vpKeyFrames.size(); i++)
-	{
-	  ostringstream ost1;
-	  ost1 << "keyframes/" << i << ".jpg";
+        cout << "  MapMaker: Saving the map.... " << endl;
+        ofstream ofs("map.dump");
+        for (unsigned int i = 0; i < mMap.vpPoints.size(); i++)
+        {
+            ofs << mMap.vpPoints[i]->v3WorldPos << "  ";
+            ofs << mMap.vpPoints[i]->nSourceLevel << endl;
+        }
+        ofs.close();
+
+        for (unsigned int i = 0; i < mMap.vpKeyFrames.size(); i++)
+        {
+            ostringstream ost1;
+            ost1 << "keyframes/" << i << ".jpg";
 //	  img_save(mMap.vpKeyFrames[i]->aLevels[0].im, ost1.str());
-	  
-	  ostringstream ost2;
-	  ost2 << "keyframes/" << i << ".info";
-	  ofstream ofs2;
-	  ofs2.open(ost2.str().c_str());
-	  ofs2 << mMap.vpKeyFrames[i]->se3CfromW << endl;
-	  ofs2.close();
-	}
-      cout << "  ... done saving map." << endl;
-      return;
+
+            ostringstream ost2;
+            ost2 << "keyframes/" << i << ".info";
+            ofstream ofs2;
+            ofs2.open(ost2.str().c_str());
+            ofs2 << mMap.vpKeyFrames[i]->se3CfromW << endl;
+            ofs2.close();
+        }
+        cout << "  ... done saving map." << endl;
+        return;
     }
-  
-  cout << "! MapMaker::GUICommandHandler: unhandled command "<< sCommand << endl;
-  exit(1);
-}; 
 
-
-
-
-
-
-
-
+    cout << "! MapMaker::GUICommandHandler: unhandled command " << sCommand
+            << endl;
+    exit(1);
+}
+;
 
 /*****
 
 
-    // cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::BGR8);
-    cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::MONO8);
+ // cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::BGR8);
+ cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::MONO8);
 
-    // cv::Mat src = cv_ptr->image;
+ // cv::Mat src = cv_ptr->image;
 
-    // cv::Scalar pixel, pixelThr; 
-    // int height = img->height; 
-    // int width  = img->width; 
-    // for (int i = 0; i < height; i++) { 
-    //     for (int j = 0; j < width; j++)  { 
-    //         pixel = cv::Get2D(src, i, j); 
-    //         if (pixel.val[0] < 100 && pixel[1] > 30) {
-    //             pixelThr.val[0] = 255; 
-    //             pixelThr.val[1] = 255; 
-    //             pixelThr.val[2] = 255; 
-    //             cv::Set2D(src, i, j, pixelThr); 
-    //         } 
-    //     } 
-    // } 
-    // uint8_t* pixelPtr = (uint8_t*)src.data;
-    // int cn = src.channels();
-    // int b, g, r;
-    // for(int i = 0; i < src.rows; i++)
-    // {
-    //     for(int j = 0; j < src.cols; j += cn)
-    //     {
-    //         b = pixelPtr[i*src.cols*cn + j*cn + 0]; // B
-    //         g = pixelPtr[i*src.cols*cn + j*cn + 1]; // G
-    //         r = pixelPtr[i*src.cols*cn + j*cn + 2]; // R
+ // cv::Scalar pixel, pixelThr;
+ // int height = img->height;
+ // int width  = img->width;
+ // for (int i = 0; i < height; i++) {
+ //     for (int j = 0; j < width; j++)  {
+ //         pixel = cv::Get2D(src, i, j);
+ //         if (pixel.val[0] < 100 && pixel[1] > 30) {
+ //             pixelThr.val[0] = 255;
+ //             pixelThr.val[1] = 255;
+ //             pixelThr.val[2] = 255;
+ //             cv::Set2D(src, i, j, pixelThr);
+ //         }
+ //     }
+ // }
+ // uint8_t* pixelPtr = (uint8_t*)src.data;
+ // int cn = src.channels();
+ // int b, g, r;
+ // for(int i = 0; i < src.rows; i++)
+ // {
+ //     for(int j = 0; j < src.cols; j += cn)
+ //     {
+ //         b = pixelPtr[i*src.cols*cn + j*cn + 0]; // B
+ //         g = pixelPtr[i*src.cols*cn + j*cn + 1]; // G
+ //         r = pixelPtr[i*src.cols*cn + j*cn + 2]; // R
 
-    //         if (b < 100 && g > 30){
-    //         pixelPtr[i*src.cols*cn + j*cn + 0] = 0; // B
-    //         pixelPtr[i*src.cols*cn + j*cn + 1] = 0; // G
-    //         pixelPtr[i*src.cols*cn + j*cn + 2] = 0; // R
+ //         if (b < 100 && g > 30){
+ //         pixelPtr[i*src.cols*cn + j*cn + 0] = 0; // B
+ //         pixelPtr[i*src.cols*cn + j*cn + 1] = 0; // G
+ //         pixelPtr[i*src.cols*cn + j*cn + 2] = 0; // R
 
-    //         }
+ //         }
 
-    //         // do something with BGR values...
-    //     }
-    // }
-    // cv::inRange(src, cv::Vec3b(0, 30, 0), cv::Vec3b(100, 255, 255), Mask);
-    // cv_ptr->image.setTo(cv::Vec3b(255, 255, 255), Mask);
+ //         // do something with BGR values...
+ //     }
+ // }
+ // cv::inRange(src, cv::Vec3b(0, 30, 0), cv::Vec3b(100, 255, 255), Mask);
+ // cv_ptr->image.setTo(cv::Vec3b(255, 255, 255), Mask);
 
-    // cv::cvtColor(src, cv_ptr->image, CV_BGR2GRAY);
+ // cv::cvtColor(src, cv_ptr->image, CV_BGR2GRAY);
 
-    // cv::blur( src, cv_ptr->image, cv::Size( 5, 5 ));
+ // cv::blur( src, cv_ptr->image, cv::Size( 5, 5 ));
 
 
-    boost::unique_lock<boost::mutex> lock(new_frame_signal_mutex);
+ boost::unique_lock<boost::mutex> lock(new_frame_signal_mutex);
 
-    // copy to internal image, convert to bw, set flag.
-    if(ros::Time::now() - img->header.stamp > ros::Duration(30.0))
-        mimFrameTimeRos = (ros::Time::now()-ros::Duration(0.001));
-    else
-        mimFrameTimeRos = (img->header.stamp);
+ // copy to internal image, convert to bw, set flag.
+ if(ros::Time::now() - img->header.stamp > ros::Duration(30.0))
+ mimFrameTimeRos = (ros::Time::now()-ros::Duration(0.001));
+ else
+ mimFrameTimeRos = (img->header.stamp);
 
-    mimFrameTime = getMS(mimFrameTimeRos);
+ mimFrameTime = getMS(mimFrameTimeRos);
 
-    //mimFrameTime = getMS(img->header.stamp);
-    mimFrameSEQ = img->header.seq;
+ //mimFrameTime = getMS(img->header.stamp);
+ mimFrameSEQ = img->header.seq;
 
-    // copy to mimFrame.
-    // TODO: make this threadsafe (save pointer only and copy in HandleFrame)
-    if(mimFrameBW.size().x != img->width || mimFrameBW.size().y != img->height)
-        mimFrameBW.resize(CVD::ImageRef(img->width, img->height));
+ // copy to mimFrame.
+ // TODO: make this threadsafe (save pointer only and copy in HandleFrame)
+ if(mimFrameBW.size().x != img->width || mimFrameBW.size().y != img->height)
+ mimFrameBW.resize(CVD::ImageRef(img->width, img->height));
 
-    memcpy(mimFrameBW.data(),cv_ptr->image.data,img->width * img->height);
-    newImageAvailable = true;
+ memcpy(mimFrameBW.data(),cv_ptr->image.data,img->width * img->height);
+ newImageAvailable = true;
 
-    lock.unlock();
-    new_frame_signal.notify_all();
-    ***/ 
+ lock.unlock();
+ new_frame_signal.notify_all();
+ ***/
