@@ -222,7 +222,7 @@ class EventListener(DroneVideoDisplay):
                 self.resetQimages()
                 self.centralWidget.setZigzagLayout()
                 # self.publisher.publish(String("ZIGZAG"))
-                self.sendZigZagDirections()
+                self.sendZigZagDirections2()
                 print "ZIGZAG"
             elif self.gesture == self.RZIGZAG:
                 self.resetQimages()
@@ -311,6 +311,54 @@ class EventListener(DroneVideoDisplay):
     def turn_rightReleased(self):
         controller.SetCommand(0, 0, 0, 0)
 
+    def sendZigZagDirections2(self):
+        # tan (32 degrees) = 0.72 but I am using a smaller number (0.62)
+        half_distance = float('%.2f' % (self.scale * ( (320 - self.points[0].x())/320.0 ) * 0.72))
+
+        self.location_history = dict()
+        heights = [0.5, 0, -0.5]
+        commands = ['clearCommands', 'lockScaleFP', 'setLineSpeed 0.2', 'setReference $POSE$', 'setStayTime 1']
+
+        commands.append('goAlongRelDir ' + str(-half_distance) + ' 0 0.5 0')
+        commands.append('snap 0')
+        # self.location_history[0] = 'gotoRelDir ' + str(-half_distance) + ' 0 0.5 0'
+
+        commands.append('goAlongRelDir ' + str( 2*half_distance) + ' 0 0 0')
+        commands.append('snap 1')
+
+        commands.append('goAlongRelDir 0 0 -0.5 0')
+        commands.append('snap 3')
+        
+        commands.append('goAlongRelDir ' + str(-2*half_distance) + ' 0 0 0')
+        commands.append('snap 2')
+
+        commands.append('goAlongRelDir 0 0 -0.5 0')
+        commands.append('snap 4')
+
+        commands.append('goAlongRelDir ' + str( 2*half_distance) + ' 0 0 0')
+        commands.append('snap 5')
+
+        for i in xrange(3):
+            self.location_history[2*i] = 'gotoRelDir ' + str(-half_distance) + ' 0 ' + str(heights[i]) + ' 0'
+            self.location_history[2*i+1] = 'gotoRelDir ' + str(half_distance) + ' 0 ' + str(heights[i]) + ' 0'
+
+        commands.append('goto 0 0 0 0')
+        commands.append('land')
+        commands.append('start')
+
+        print self.points[0].x()
+        print 'scale =', self.scale
+        print 'half_d =', half_distance
+        print commands
+
+        # if half_distance > 0.8:
+        #     # Too bad. Don't wanna risk it.
+        #     self.points = []
+        #     return
+
+        for command in commands:
+            self.tum_ardrone_pub.publish(String("c " + command))
+
     def sendZigZagDirections(self):
         # tan (32 degrees) = 0.72 but I am using a smaller number (0.62)
         half_distance = float('%.2f' % (self.scale * ( (320 - self.points[0].x())/320.0 ) * 0.72))
@@ -374,8 +422,8 @@ class EventListener(DroneVideoDisplay):
                 y = float(numbers[1])
                 z = float(numbers[2])
                 all_points.append([y, x, z])
-                if 160 < x and x < 480:
-                    if 20 < y and y < 300:
+                if 60 < x and x < 580:
+                    if 20 < y and y < 340:
                         points.append([x, y, z])
         
         points.sort(key= lambda x: x[2])
@@ -390,10 +438,10 @@ class EventListener(DroneVideoDisplay):
                 self.toggle = 1
 
         # def partition(points):
-        colors = [ [15, 255, 0, 70],
-                   [100, 160, 190, 70],
-                   [170, 160, 100, 70],
-                   [230, 160, 100, 70] ]
+        colors = [ [15, 255, 0, 200],
+                   [200, 160, 190, 200],
+                   [250, 200, 0, 200],
+                   [250, 60, 0, 200] ]
         self.circles = []
         if len(points) > 0:
             cur_partition_elems = []

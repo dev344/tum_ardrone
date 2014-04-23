@@ -285,12 +285,13 @@ void ControlNode::popNextCommand(const tum_ardrone::filter_stateConstPtr statePt
         // [Devesh]
 		// gotoRelDir: When to want to go to a location relative to 
         // a co-ordinate system aligned with your yaw angle. (i.e, when 
-        // straight ahead of drone is y-axis)
+        // straight-ahead for the drone is imagined as y-axis at that instant)
 		else if(sscanf(command.c_str(),"gotoRelDir %f %f %f %f",&parameters[0], &parameters[1], &parameters[2], &parameters[3]) == 4)
 		{
             currentKI = new KIFlyToRelDir(
                     DronePosition(
                         // acos(yaw) - bsin(yaw), asin(yaw) + bcos(yaw)
+                        // statePtr->yaw is clockwise. So, I take negative of it.
                         TooN::makeVector(parameters[0]*cos(-statePtr->yaw * PI / 180) - parameters[1]*sin(-statePtr->yaw * PI / 180), 
                                          parameters[0]*sin(-statePtr->yaw * PI / 180) + parameters[1]*cos(-statePtr->yaw * PI / 180), 
                                          parameters[2]) +
@@ -304,9 +305,28 @@ void ControlNode::popNextCommand(const tum_ardrone::filter_stateConstPtr statePt
             currentKI->setPointers(this,&controller);
             commandUnderstood = true;
 
-            std::cout << "checkpoint thingys are " << parameters[0]*cos(-statePtr->yaw * PI / 180) - parameters[1]*sin(-statePtr->yaw * PI / 180) 
-                << parameters[0]*sin(-statePtr->yaw * PI / 180) + parameters[1]*cos(-statePtr->yaw * PI / 180) << statePtr->yaw << endl;
+            //std::cout << "checkpoint thingys are " << parameters[0]*cos(-statePtr->yaw * PI / 180) - parameters[1]*sin(-statePtr->yaw * PI / 180) 
+            //    << parameters[0]*sin(-statePtr->yaw * PI / 180) + parameters[1]*cos(-statePtr->yaw * PI / 180) << statePtr->yaw << endl;
+            
+		}
 
+        // [Devesh]
+		else if(sscanf(command.c_str(),"goAlongRelDir %f %f %f %f",&parameters[0], &parameters[1], &parameters[2], &parameters[3]) == 4)
+		{
+            currentKI = new KIFlyAlong(
+				// current position
+				DronePosition(TooN::makeVector(statePtr->x,statePtr->y,statePtr->z), statePtr->yaw),
+				// direction
+				TooN::makeVector(parameters[0]*cos(-statePtr->yaw * PI / 180) - parameters[1]*sin(-statePtr->yaw * PI / 180), 
+                                 parameters[0]*sin(-statePtr->yaw * PI / 180) + parameters[1]*cos(-statePtr->yaw * PI / 180), 
+                                 parameters[2]),
+				// line speed
+				parameter_LineSpeed,
+				// distance
+				sqrt( parameters[0]*parameters[0] + parameters[1]*parameters[1] + parameters[2]*parameters[2] )
+				);
+			currentKI->setPointers(this,&controller);
+			commandUnderstood = true;
 		}
 
 		// moveBy
