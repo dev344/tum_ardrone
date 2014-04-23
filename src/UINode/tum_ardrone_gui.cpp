@@ -35,15 +35,18 @@
 #include <iostream>
 #include <fstream>
 
-int getdirtxt(std::string dir, std::vector<std::string> &files) {
+int getdirtxt(std::string dir, std::vector<std::string> &files)
+{
 	DIR *dp;
 	struct dirent *dirp;
-	if ((dp = opendir(dir.c_str())) == NULL) {
+	if ((dp = opendir(dir.c_str())) == NULL)
+	{
 		std::cout << "Error(" << errno << ") opening " << dir << std::endl;
 		return errno;
 	}
 
-	while ((dirp = readdir(dp)) != NULL) {
+	while ((dirp = readdir(dp)) != NULL)
+	{
 		std::string f = dirp->d_name;
 		if (f.size() > 4 && f.substr(f.size() - 4) == ".txt")
 			files.push_back(std::string(dirp->d_name));
@@ -53,14 +56,16 @@ int getdirtxt(std::string dir, std::vector<std::string> &files) {
 }
 
 tum_ardrone_gui::tum_ardrone_gui(QWidget *parent) :
-		QWidget(parent) {
+		QWidget(parent)
+{
 	ui.setupUi(this);
 	rosThread = NULL;
-	sensGaz = sensYaw = sensRP = 1;	// [ziquan: original value was 1]
+	sensGaz = sensYaw = sensRP = 1; // [ziquan: original value was 1]
 	currentControlSource = CONTROL_NONE;
 	useHovering = true;
 
-	for (int i = 0; i < 18; i++) {
+	for (int i = 0; i < 18; i++)
+	{
 		isPressed[i] = false;
 		lastRepeat[i] = 0;
 	}
@@ -104,32 +109,41 @@ tum_ardrone_gui::tum_ardrone_gui(QWidget *parent) :
 
 }
 
-tum_ardrone_gui::~tum_ardrone_gui() {
+tum_ardrone_gui::~tum_ardrone_gui()
+{
 }
 
 // clicked functions
-void tum_ardrone_gui::LandClicked() {
+void tum_ardrone_gui::LandClicked()
+{
 	rosThread->sendLand();
 }
-void tum_ardrone_gui::TakeoffClicked() {
+void tum_ardrone_gui::TakeoffClicked()
+{
 	rosThread->sendTakeoff();
 }
-void tum_ardrone_gui::ToggleCamClicked() {
+void tum_ardrone_gui::ToggleCamClicked()
+{
 	rosThread->sendToggleCam();
 }
-void tum_ardrone_gui::FlattrimClicked() {
+void tum_ardrone_gui::FlattrimClicked()
+{
 	rosThread->sendFlattrim();
 }
-void tum_ardrone_gui::EmergencyClicked() {
+void tum_ardrone_gui::EmergencyClicked()
+{
 	rosThread->sendToggleState();
 }
 
-void tum_ardrone_gui::ClearClicked() {
+void tum_ardrone_gui::ClearClicked()
+{
 	rosThread->publishCommand("c clearCommands");
 }
-void tum_ardrone_gui::SendClicked() {
+void tum_ardrone_gui::SendClicked()
+{
 	QStringList l = ui.plainTextEditSendCommand->toPlainText().split('\n');
-	for (int i = 0; i < l.length(); i++) {
+	for (int i = 0; i < l.length(); i++)
+	{
 		std::string s = l[i].trimmed().toStdString();
 
 		if (s.size() > 0)
@@ -137,20 +151,24 @@ void tum_ardrone_gui::SendClicked() {
 	}
 	setControlSource(CONTROL_AUTO);
 }
-void tum_ardrone_gui::ClearSendClicked() {
+void tum_ardrone_gui::ClearSendClicked()
+{
 	ClearClicked();
 	SendClicked();
 }
-void tum_ardrone_gui::ResetClicked() {
+void tum_ardrone_gui::ResetClicked()
+{
 	setControlSource(CONTROL_NONE);
 	ClearClicked();
 	rosThread->publishCommand("f reset");
 }
 
-void tum_ardrone_gui::LoadFileChanged(QString val) {
+void tum_ardrone_gui::LoadFileChanged(QString val)
+{
 	if (val == "")
 		ui.plainTextEditSendCommand->setPlainText("");
-	else {
+	else
+	{
 		std::string path = ros::package::getPath("tum_ardrone")
 				+ std::string("/flightPlans/") + val.toStdString();
 		addLogLine("Load File " + path);
@@ -159,7 +177,8 @@ void tum_ardrone_gui::LoadFileChanged(QString val) {
 		t.open(path.c_str());
 		std::string buffer = "";
 		std::string line;
-		while (!t.eof()) {
+		while (!t.eof())
+		{
 			std::getline(t, line);
 			buffer = buffer + line + "\n";
 		}
@@ -168,16 +187,19 @@ void tum_ardrone_gui::LoadFileChanged(QString val) {
 		ui.plainTextEditSendCommand->setPlainText(buffer.c_str());
 	}
 }
-void tum_ardrone_gui::ToggledUseHovering(int val) {
+void tum_ardrone_gui::ToggledUseHovering(int val)
+{
 	useHovering = (val != 0);
 }
 
-void tum_ardrone_gui::ToggledPingDrone(int val) {
+void tum_ardrone_gui::ToggledPingDrone(int val)
+{
 	pingThread->measure = (val != 0);
 }
 
 // change control source functions
-void tum_ardrone_gui::ControlSourceChanged() {
+void tum_ardrone_gui::ControlSourceChanged()
+{
 	ControlSource s = CONTROL_NONE;
 
 	if (ui.radioButtonControKB->isChecked())
@@ -197,7 +219,8 @@ void tum_ardrone_gui::ControlSourceChanged() {
 	currentControlSource = s;
 }
 
-void tum_ardrone_gui::setControlSourceSlot(int cont) {
+void tum_ardrone_gui::setControlSourceSlot(int cont)
+{
 
 	currentControlSource = (ControlSource) cont;
 	if (cont == CONTROL_KB)
@@ -213,7 +236,8 @@ void tum_ardrone_gui::setControlSourceSlot(int cont) {
 }
 
 void tum_ardrone_gui::setCountsSlot(unsigned int nav, unsigned int control,
-		unsigned int pose, unsigned int joy) {
+		unsigned int pose, unsigned int joy)
+{
 	char buf[100];
 	snprintf(buf, 100, "Drone Control: %d Hz", control);
 	ui.labelControl->setText(buf);
@@ -228,59 +252,75 @@ void tum_ardrone_gui::setCountsSlot(unsigned int nav, unsigned int control,
 	ui.labelPoseEst->setText(buf);
 }
 
-void tum_ardrone_gui::setPingsSlot(int p500, int p20000) {
+void tum_ardrone_gui::setPingsSlot(int p500, int p20000)
+{
 	char buf[100];
 	snprintf(buf, 100, "Pings (RTT): %d (500B), %d (20kB)", p500, p20000);
 	ui.labelDronePings->setText(buf);
 }
 
-void tum_ardrone_gui::addLogLineSlot(QString s) {
+void tum_ardrone_gui::addLogLineSlot(QString s)
+{
 	ui.plainTextEditMessages->appendPlainText(s);
 }
-void tum_ardrone_gui::setAutopilotInfoSlot(QString s) {
+void tum_ardrone_gui::setAutopilotInfoSlot(QString s)
+{
 	ui.plainTextEditAutopilotStatus->setPlainText(s);
 }
-void tum_ardrone_gui::setStateestimationInfoSlot(QString s) {
+void tum_ardrone_gui::setStateestimationInfoSlot(QString s)
+{
 	ui.plainTextEditStateestimationStatus->setPlainText(s);
 }
-void tum_ardrone_gui::setMotorSpeedsSlot(QString s) {
+void tum_ardrone_gui::setMotorSpeedsSlot(QString s)
+{
 	ui.labelDroneMotors->setText(s);
 }
-void tum_ardrone_gui::closeWindowSlot() {
+void tum_ardrone_gui::closeWindowSlot()
+{
 	closeWindow();
 }
 
 // these may be called from external thread,
 // so they just "forward" the request.
 void tum_ardrone_gui::setCounts(unsigned int nav, unsigned int control,
-		unsigned int pose, unsigned int joy) {
+		unsigned int pose, unsigned int joy)
+{
 	emit setCountsSignal(nav, control, pose, joy);
 }
-void tum_ardrone_gui::setControlSource(ControlSource cont) {
+void tum_ardrone_gui::setControlSource(ControlSource cont)
+{
 	emit setControlSourceSignal((int) cont);
 }
-void tum_ardrone_gui::addLogLine(std::string s) {
+void tum_ardrone_gui::addLogLine(std::string s)
+{
 	emit addLogLineSignal(QString(s.c_str()));
 }
-void tum_ardrone_gui::setAutopilotInfo(std::string s) {
+void tum_ardrone_gui::setAutopilotInfo(std::string s)
+{
 	emit setAutopilotInfoSignal(QString(s.c_str()));
 }
-void tum_ardrone_gui::setMotorSpeeds(std::string s) {
+void tum_ardrone_gui::setMotorSpeeds(std::string s)
+{
 	emit setMotorSpeedsSignal(QString(s.c_str()));
 }
-void tum_ardrone_gui::setStateestimationInfo(std::string s) {
+void tum_ardrone_gui::setStateestimationInfo(std::string s)
+{
 	emit setStateestimationInfoSignal(QString(s.c_str()));
 }
-void tum_ardrone_gui::setPings(int p500, int p20000) {
+void tum_ardrone_gui::setPings(int p500, int p20000)
+{
 	emit setPingsSignal(p500, p20000);
 }
-void tum_ardrone_gui::closeWindow() {
+void tum_ardrone_gui::closeWindow()
+{
 	emit closeWindowSignal();
 }
 
 // KB control stuff
-int tum_ardrone_gui::mapKey(int k) {
-	switch (k) {
+int tum_ardrone_gui::mapKey(int k)
+{
+	switch (k)
+	{
 	case 74: //j
 		return 0;
 	case 75: //k
@@ -298,17 +338,20 @@ int tum_ardrone_gui::mapKey(int k) {
 	case 65: //a
 		return 7;
 	}
-	if (k >= 48 && k <= 57)	// 0 ~ 9
+	if (k >= 48 && k <= 57) // 0 ~ 9
 		return k - 48 + 8;
 	return -1;
 }
 
-void tum_ardrone_gui::keyReleaseEvent(QKeyEvent * key) {
-	if (currentControlSource == CONTROL_KB) {
+void tum_ardrone_gui::keyReleaseEvent(QKeyEvent * key)
+{
+	if (currentControlSource == CONTROL_KB)
+	{
 		int idx = mapKey(key->key());
-		if (idx >= 0) {
+		if (idx >= 0)
+		{
 			bool changed = false;
-			if (!key->isAutoRepeat())	// ignore autorepeat-releases (!)
+			if (!key->isAutoRepeat()) // ignore autorepeat-releases (!)
 			{
 				changed = isPressed[idx];
 				isPressed[idx] = false;
@@ -320,11 +363,14 @@ void tum_ardrone_gui::keyReleaseEvent(QKeyEvent * key) {
 	}
 }
 
-void tum_ardrone_gui::keyPressEvent(QKeyEvent * key) {
+void tum_ardrone_gui::keyPressEvent(QKeyEvent * key)
+{
 
-	if (currentControlSource == CONTROL_KB) {
+	if (currentControlSource == CONTROL_KB)
+	{
 		int idx = mapKey(key->key());
-		if (idx >= 0) {
+		if (idx >= 0)
+		{
 			bool changed = !isPressed[idx];
 
 			isPressed[idx] = true;
@@ -334,26 +380,27 @@ void tum_ardrone_gui::keyPressEvent(QKeyEvent * key) {
 				rosThread->sendControlToDrone(calcKBControl());
 		}
 
-		else if (key->key() == 83)	// s
+		else if (key->key() == 83) // s
 			rosThread->sendTakeoff();
 
-		else if (key->key() == 68)	// d
+		else if (key->key() == 68) // d
 			rosThread->sendLand();
 	}
 
-	if (key->key() == 16777216)	// ESC
-			{
+	if (key->key() == 16777216) // ESC
+	{
 		setFocus();
 		setControlSource(CONTROL_KB);
 	}
 
-	if (key->key() == 16777264)	// F1
-			{
+	if (key->key() == 16777264) // F1
+	{
 		rosThread->sendToggleState();
 	}
 }
 
-ControlCommand tum_ardrone_gui::calcKBControl() {
+ControlCommand tum_ardrone_gui::calcKBControl()
+{
 	// clear keys that have not been refreshed for 1s, it is set to "not pressed"
 	for (int i = 0; i < 18; i++)
 		isPressed[i] = isPressed[i] && ((lastRepeat[i] + 1000) > getMS());
@@ -377,25 +424,25 @@ ControlCommand tum_ardrone_gui::calcKBControl() {
 	if (isPressed[7])
 		c.gaz = -sensRP; // a
 	if (isPressed[8])
-		c.pitch = sensRP;			// 0
+		c.pitch = sensRP; // 0
 	if (isPressed[9])
-		c.pitch = 0.001 * sensRP; 	// 1
+		c.pitch = 0.001 * sensRP; // 1
 	if (isPressed[10])
-		c.pitch = 0.005 * sensRP; 	// 2
+		c.pitch = 0.005 * sensRP; // 2
 	if (isPressed[11])
-		c.pitch = 0.01 * sensRP; 	// 3
+		c.pitch = 0.01 * sensRP; // 3
 	if (isPressed[12])
-		c.pitch = 0.02 * sensRP; 	// 4
+		c.pitch = 0.02 * sensRP; // 4
 	if (isPressed[13])
-		c.pitch = 0.03 * sensRP;	// 5
+		c.pitch = 0.03 * sensRP; // 5
 	if (isPressed[14])
-		c.pitch = 0.04 * sensRP; 	// 6
+		c.pitch = 0.04 * sensRP; // 6
 	if (isPressed[15])
-		c.pitch = 0.05 * sensRP;	// 7
+		c.pitch = 0.05 * sensRP; // 7
 	if (isPressed[16])
-		c.pitch = 0.1 * sensRP;		// 8
+		c.pitch = 0.1 * sensRP; // 8
 	if (isPressed[17])
-		c.pitch = 0.2 * sensRP;		// 9
+		c.pitch = 0.2 * sensRP; // 9
 
 	return c;
 }
