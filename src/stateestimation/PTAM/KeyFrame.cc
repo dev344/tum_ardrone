@@ -8,18 +8,10 @@
 #include "settingsCustom.h"
 
 #include <opencv2/opencv.hpp>
-#include "sparsestereo/exception.h"
-#include "sparsestereo/extendedfast.h"
-#include "sparsestereo/stereorectification.h"
-#include "sparsestereo/sparsestereo-inl.h"
-#include "sparsestereo/census-inl.h"
-#include "sparsestereo/imageconversion.h"
-#include "sparsestereo/censuswindow.h"
 
 using namespace CVD;
 using namespace std;
 using namespace GVars3;
-using namespace sparsestereo;
 
 void KeyFrame::MakeKeyFrame_Lite(BasicImage<byte> &im)
 {

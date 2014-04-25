@@ -103,6 +103,12 @@ void DroneController::setTarget(DronePosition newTarget)
 
     if (node != NULL)
         node->publishCommand(std::string("u l ") + buf);
+    //char buf[200];
+    //snprintf(buf,200,"New Target: xyz = %.3f, %.3f, %.3f,  yaw=%.3f", target.pos[0],target.pos[1],target.pos[2],target.yaw);
+    //ROS_INFO(buf);
+
+    //if(node != NULL)
+    //	node->publishCommand(std::string("u l ") + buf);
 }
 
 DronePosition DroneController::getCurrentTarget()

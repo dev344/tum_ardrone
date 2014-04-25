@@ -26,6 +26,7 @@
 #include "geometry_msgs/Twist.h"
 #include "../HelperFunctions.h"
 #include "tum_ardrone/filter_state.h"
+#include <ardrone_autonomy/Navdata.h>
 #include "std_msgs/String.h"
 #include <sys/stat.h>
 #include <string>
@@ -40,6 +41,8 @@
 #include "KI/KIQLearning.h"	//[ziquan]
 #include "KI/KIModel.h"		//[ziquan]
 #include "KI/KIRepsExe.h"	//[ziquan]
+#include "KI/KIRecover.h"	//[ziquan]
+#include "KI/KIZigZagBoard.h"	//[ziquan]
 #include "KI/KIProcedure.h"
 
 // [Devesh]
@@ -55,6 +58,7 @@ ControlNode::ControlNode()
 {
     control_channel = nh_.resolveName("cmd_vel");
     dronepose_channel = nh_.resolveName("ardrone/predictedPose");
+    navdata_channel = nh_.resolveName("ardrone/navdata");
     command_channel = nh_.resolveName("tum_ardrone/com");
     takeoff_channel = nh_.resolveName("ardrone/takeoff");
     land_channel = nh_.resolveName("ardrone/land");
@@ -82,6 +86,8 @@ ControlNode::ControlNode()
     // channels
     dronepose_sub = nh_.subscribe(dronepose_channel, 10,
             &ControlNode::droneposeCb, this);
+    navdata_sub = nh_.subscribe(navdata_channel, 10, &ControlNode::navdataCb,
+            this);
     vel_pub = nh_.advertise < geometry_msgs::Twist > (control_channel, 1);
     tum_ardrone_pub = nh_.advertise < std_msgs::String > (command_channel, 50);
     tum_ardrone_sub = nh_.subscribe(command_channel, 50, &ControlNode::comCb,
@@ -103,6 +109,7 @@ ControlNode::ControlNode()
     parameter_StayWithinDist = 0.5;
     parameter_StayTime = 2;
     parameter_LineSpeed = 0.1;
+    parameter_GSVScalar = 1.8;
     isControlling = false;
     currentKI = NULL;
     lastSentControl = ControlCommand(0, 0, 0, 0);
@@ -110,6 +117,11 @@ ControlNode::ControlNode()
     // create controller
     controller = DroneController();
     controller.node = this;
+    // [ziquan] trajectory
+    trajectoryMaxSize = 300;
+
+    // [ziquan] force keyframe
+    lastForceKFMS = -1;
 }
 
 ControlNode::~ControlNode()
@@ -123,6 +135,9 @@ void ControlNode::droneposeCb(const tum_ardrone::filter_stateConstPtr statePtr)
     // do controlling
     pthread_mutex_lock(&commandQueue_CS);
 
+    /*
+<<<<<<< HEAD
+    */
     // as long as no KI present:
     // pop next KI (if next KI present).
     while (currentKI == NULL && commandQueue.size() > 0)
@@ -146,6 +161,178 @@ void ControlNode::droneposeCb(const tum_ardrone::filter_stateConstPtr statePtr)
     }
 
     pthread_mutex_unlock(&commandQueue_CS);
+    /*
+=======
+    // nasty force keyframe every 1 second
+    if (lastForceKFMS < 0)
+    {
+        lastForceKFMS = getMS();
+        publishCommand("p keyframe"); // take KF
+    }
+    else if (getMS() - lastForceKFMS >= 1000)
+    {
+        lastForceKFMS = getMS();
+        publishCommand("p keyframe"); // take KF
+    }
+
+    // good position, update trajectory
+    if (statePtr->ptamState == statePtr->PTAM_GOOD
+            || statePtr->ptamState == statePtr->PTAM_BEST
+            || statePtr->ptamState == statePtr->PTAM_TOOKKF)
+    {
+        while (trajectory.size() >= trajectoryMaxSize)
+        {
+            trajectory.pop_back();
+        }
+        trajectory.push_front(
+                DronePosition(
+                        TooN::makeVector(statePtr->x, statePtr->y, statePtr->z),
+                        statePtr->yaw));
+    }
+
+    // as long as no KI present:
+    // pop next KI (if next KI present).
+    while (currentKI == NULL && !commandQueue.empty())
+    {
+        // lost -> INTERRUPT!
+        if (statePtr->ptamState == statePtr->PTAM_LOST)
+        {
+            currentKIString = "Recovering";
+            // Recovering
+            if (!trajectory.empty())
+            {
+                delete currentKI;
+                currentKI = new KIRecover(trajectory.front(), 0.1);
+                currentKI->setPointers(this, &controller);
+            }
+            else
+            {
+                sendControlToDrone(hoverCommand);
+                ROS_WARN(
+                        "lost track, and there is no previous tracked position to try -> sending HOVER");
+            }
+        }
+        else
+        {
+            popNextCommand(statePtr);
+        }
+    }
+
+    if (currentKI != NULL)
+    {
+        // lost -> INTERRUPT!
+        if (statePtr->ptamState == statePtr->PTAM_LOST
+                && currentKIString != "Recovering")
+        {
+            commandQueue.push_front(currentKIString);
+            currentKIString = "Recovering";
+            // Recovering
+            if (!trajectory.empty())
+            {
+                delete currentKI;
+                currentKI = new KIRecover(trajectory.front(), 0.1);
+                currentKI->setPointers(this, &controller);
+                ROS_WARN("lost track -> start RECOVERING");
+            }
+            else
+            {
+                sendControlToDrone(hoverCommand);
+                ROS_WARN(
+                        "lost track, and there is no previous tracked position to try -> sending HOVER");
+            }
+        }
+        // let current KI control.
+        else if (currentKI->update(statePtr))
+        {
+            // RECOVERING
+            if (currentKIString == "Recovering")
+            {
+                if (statePtr->ptamState == statePtr->PTAM_LOST)
+                {
+                    if (!trajectory.empty())
+                    {
+                        trajectory.pop_front();
+                        delete currentKI;
+                        currentKI = new KIRecover(trajectory.front(), 0.01);
+                        currentKI->setPointers(this, &controller);
+                        ROS_WARN(
+                                "lost track, recover failed -> start RECOVERING again");
+                    }
+                    else
+                    {
+                        sendControlToDrone(hoverCommand);
+                        ROS_WARN(
+                                "lost track, and there is no previous tracked position to try -> sending HOVER");
+                    }
+                }
+                else if (statePtr->ptamState == statePtr->PTAM_GOOD
+                        || statePtr->ptamState == statePtr->PTAM_BEST)
+                {
+                    publishCommand("p keyframe"); // take KF
+                    delete currentKI;
+                    currentKI = NULL;
+                    currentKIString.clear();
+                    ROS_WARN("recovered -> FORCE KF");
+                }
+                else if (statePtr->ptamState == statePtr->PTAM_TOOKKF)
+                {
+                    delete currentKI;
+                    currentKI = NULL;
+                    currentKIString.clear();
+                    ROS_WARN("recovered -> NO FORCE KF");
+                }
+            }
+            // there is no other KIs in the queue, but the last KI is done.
+            else
+            {
+                // it it not optimal to send hover, but it is reasonable and easy
+                sendControlToDrone(hoverCommand);
+                ROS_WARN(
+                        "Autopilot is Controlling, but there is no more KI -> sending HOVER");
+            }
+        }
+        else
+        {
+            // not lost or recovering
+        }
+    }
+    // if there is no current KI now, we obviously have no current goal -> send drone hover
+    // it it not optimal to send hover, but it is reasonable and easy
+    else if (isControlling)
+    {
+        // lost -> RECOVER
+        if (statePtr->ptamState == statePtr->PTAM_LOST)
+        {
+            currentKIString = "Recovering";
+            // Recovering
+            if (!trajectory.empty())
+            {
+                delete currentKI;
+                currentKI = new KIRecover(trajectory.front(), 0.01);
+                currentKI->setPointers(this, &controller);
+            }
+            else
+            {
+                sendControlToDrone(hoverCommand);
+                ROS_WARN(
+                        "lost track, and there is no previous tracked position to try -> sending HOVER");
+            }
+        }
+        else
+        {
+            sendControlToDrone(hoverCommand);
+            ROS_WARN(
+                    "Autopilot is Controlling, but KI is NULL -> sending HOVER");
+        }
+    }
+
+    pthread_mutex_unlock(&commandQueue_CS);
+    */
+}
+
+void ControlNode::navdataCb(const ardrone_autonomy::NavdataConstPtr navdataPtr)
+{
+    altdMM = navdataPtr->altd;
 }
 
 // pops next command(s) from queue (until one is found thats not "done" yet).
@@ -153,7 +340,7 @@ void ControlNode::droneposeCb(const tum_ardrone::filter_stateConstPtr statePtr)
 void ControlNode::popNextCommand(
         const tum_ardrone::filter_stateConstPtr statePtr)
 {
-    // should actually not happen., but to make shure:
+    // should actually not happen., but to make sure:
     // delete existing KI.
     if (currentKI != NULL)
     {
@@ -173,7 +360,7 @@ void ControlNode::popNextCommand(
 
         int p;
         char buf[100];
-        float parameters[10];
+        float parameters[12];
 
         // [Devesh]
         char snap_num;
@@ -284,6 +471,14 @@ void ControlNode::popNextCommand(
             commandUnderstood = true;
         }
 
+        // setGSVScaler [ziquan]
+        else if (sscanf(command.c_str(), "setGSVScaler %f", &parameters[0])
+                == 1)
+        {
+            parameter_GSVScalar = parameters[0];
+            commandUnderstood = true;
+        }
+
         // goto
         else if (sscanf(command.c_str(), "goto %f %f %f %f", &parameters[0],
                 &parameters[1], &parameters[2], &parameters[3]) == 4)
@@ -298,7 +493,7 @@ void ControlNode::popNextCommand(
                     parameter_InitialReachDist, parameter_StayWithinDist);
             currentKI->setPointers(this, &controller);
             commandUnderstood = true;
-
+            currentKIString = command;
         }
 
         // [Devesh]
@@ -383,7 +578,7 @@ void ControlNode::popNextCommand(
                     parameter_InitialReachDist, parameter_StayWithinDist);
             currentKI->setPointers(this, &controller);
             commandUnderstood = true;
-
+            currentKIString = command;
         }
 
         // moveByRel
@@ -401,7 +596,7 @@ void ControlNode::popNextCommand(
                     parameter_StayWithinDist);
             currentKI->setPointers(this, &controller);
             commandUnderstood = true;
-
+            currentKIString = command;
         }
 
         // land
@@ -410,6 +605,7 @@ void ControlNode::popNextCommand(
             currentKI = new KILand();
             currentKI->setPointers(this, &controller);
             commandUnderstood = true;
+            currentKIString = command;
         }
 
         // setScaleFP
@@ -446,6 +642,7 @@ void ControlNode::popNextCommand(
                     parameters[3]);
             currentKI->setPointers(this, &controller);
             commandUnderstood = true;
+            currentKIString = command;
         }
 
         // spin [ziquan]
@@ -462,44 +659,75 @@ void ControlNode::popNextCommand(
                     parameters[0]);
             currentKI->setPointers(this, &controller);
             commandUnderstood = true;
+            currentKIString = command;
         }
-
-        // circle [ziquan]
+        // circleL4 [ziquan]
+        else if (sscanf(command.c_str(), "circleL %f %f %f %f", &parameters[0],
+                &parameters[1], &parameters[2], &parameters[3]) == 4)
+        {
+            TooN::Vector<3> centerPoint = TooN::makeVector(parameters[0],
+                    parameters[1], parameters[2]);
+            TooN::Vector<3> upVector = TooN::makeVector(0.0, 0.0, 1.0);
+            double radius = parameters[3];
+            currentKI = new KICircle(centerPoint, upVector, radius,
+                    parameter_LineSpeed, parameter_StayTime);
+            currentKI->setPointers(this, &controller);
+            commandUnderstood = true;
+            currentKIString = command;
+        }
+        // circleL3 [ziquan]
         else if (sscanf(command.c_str(), "circleL %f %f %f", &parameters[0],
                 &parameters[1], &parameters[2]) == 3)
         {
-            currentKI = new KICircle(
-                    // current position
-                    DronePosition(
-                            TooN::makeVector(statePtr->x, statePtr->y,
-                                    statePtr->z), statePtr->yaw),
-                    // center
-                    TooN::makeVector(parameters[0], parameters[1],
-                            parameters[2]) + parameter_referenceZero.pos,
-                    // upVector
-                    TooN::makeVector(0.0, 0.0, 1.0), parameter_LineSpeed,
-                    parameter_StayTime);
+            TooN::Vector<3> centerPoint = TooN::makeVector(parameters[0],
+                    parameters[1], parameters[2]) + parameter_referenceZero.pos;
+            TooN::Vector<3> currentPoint = TooN::makeVector(statePtr->x,
+                    statePtr->y, statePtr->z);
+            TooN::Vector<3> upVector = TooN::makeVector(0.0, 0.0, 1.0);
+            double radius = sqrt(
+                    (centerPoint - currentPoint)
+                            * (centerPoint - currentPoint));
+            currentKI = new KICircle(centerPoint, upVector, radius,
+                    parameter_LineSpeed, parameter_StayTime);
             currentKI->setPointers(this, &controller);
             commandUnderstood = true;
+            snprintf(buf, 100, "circleL %.3f %.3f %.3f %.3f", centerPoint[0],
+                    centerPoint[1], centerPoint[2], radius);
+            currentKIString = std::string(buf);
         }
-
-        // circle [ziquan]
+        // circleR4 [ziquan]
+        else if (sscanf(command.c_str(), "circleR %f %f %f %f", &parameters[0],
+                &parameters[1], &parameters[2], &parameters[3]) == 4)
+        {
+            TooN::Vector<3> centerPoint = TooN::makeVector(parameters[0],
+                    parameters[1], parameters[2]);
+            TooN::Vector<3> upVector = TooN::makeVector(0.0, 0.0, -1.0);
+            double radius = parameters[3];
+            currentKI = new KICircle(centerPoint, upVector, radius,
+                    parameter_LineSpeed, parameter_StayTime);
+            currentKI->setPointers(this, &controller);
+            commandUnderstood = true;
+            currentKIString = command;
+        }
+        // circleR3 [ziquan]
         else if (sscanf(command.c_str(), "circleR %f %f %f", &parameters[0],
                 &parameters[1], &parameters[2]) == 3)
         {
-            currentKI = new KICircle(
-                    // current position
-                    DronePosition(
-                            TooN::makeVector(statePtr->x, statePtr->y,
-                                    statePtr->z), statePtr->yaw),
-                    // center
-                    TooN::makeVector(parameters[0], parameters[1],
-                            parameters[2]) + parameter_referenceZero.pos,
-                    // upVector
-                    TooN::makeVector(0.0, 0.0, -1.0), parameter_LineSpeed,
-                    parameter_StayTime);
+            TooN::Vector<3> centerPoint = TooN::makeVector(parameters[0],
+                    parameters[1], parameters[2]) + parameter_referenceZero.pos;
+            TooN::Vector<3> currentPoint = TooN::makeVector(statePtr->x,
+                    statePtr->y, statePtr->z);
+            TooN::Vector<3> upVector = TooN::makeVector(0.0, 0.0, -1.0);
+            double radius = sqrt(
+                    (centerPoint - currentPoint)
+                            * (centerPoint - currentPoint));
+            currentKI = new KICircle(centerPoint, upVector, radius,
+                    parameter_LineSpeed, parameter_StayTime);
             currentKI->setPointers(this, &controller);
             commandUnderstood = true;
+            snprintf(buf, 100, "circleR %.3f %.3f %.3f %.3f", centerPoint[0],
+                    centerPoint[1], centerPoint[2], radius);
+            currentKIString = std::string(buf);
         }
         // Qlearning [ziquan]
         else if (sscanf(command.c_str(), "qlearn %f %f", &parameters[0],
@@ -525,10 +753,112 @@ void ControlNode::popNextCommand(
             currentKI->setPointers(this, &controller);
             commandUnderstood = true;
         }
+        // GSV_goto [ziquan]
+        else if (sscanf(command.c_str(), "GSV_goto %f %f", &parameters[0],
+                &parameters[1]) == 2)
+        {
+            double direction = statePtr->yaw + parameters[0]; // yaw + angle_x
+            while (direction < -180)
+            {
+                direction += 360;
+            }
+            while (direction >= 180)
+            {
+                direction -= 360;
+            }
+            double distance = altdMM * 0.001
+                    * tan(M_PI_2 - parameters[1] * M_PI / 180); // height * cot(angle_y)
+            distance *= parameter_GSVScalar;
+            currentKI = new KIFlyTo(
+                    DronePosition(
+                            TooN::makeVector(
+                                    statePtr->x
+                                            + distance
+                                                    * sin(
+                                                            direction * M_PI
+                                                                    / 180),
+                                    statePtr->y
+                                            + distance
+                                                    * cos(
+                                                            direction * M_PI
+                                                                    / 180),
+                                    statePtr->z), direction),
+                    parameter_StayTime, parameter_MaxControl,
+                    parameter_InitialReachDist, parameter_StayWithinDist);
+            currentKI->setPointers(this, &controller);
+            commandUnderstood = true;
+            currentKIString = command;
+        }
+//// GSV_circle [ziquan]
+//		else if (sscanf(command.c_str(), "GSV_circle %f %f", &parameters[0],
+//				&parameters[1]) == 2) {
+//			double direction = statePtr->yaw + parameters[0];	// yaw + angle_x
+//			while (direction < -180) {
+//				direction += 360;
+//			}
+//			while (direction >= 180) {
+//				direction -= 360;
+//			}
+//			double distance = altdMM * 0.001
+//					* tan(M_PI_2 - parameters[1] * M_PI / 180);	// height * cot(angle_y)
+//			distance *= parameter_GSVScalar;
+//			currentKI = new KICircle(
+//					// current position
+//					DronePosition(
+//							TooN::makeVector(statePtr->x, statePtr->y,
+//									statePtr->z), statePtr->yaw),
+//					// center
+//					TooN::makeVector(
+//							statePtr->x
+//									+ distance * sin(direction * M_PI / 180),
+//							statePtr->y
+//									+ distance * cos(direction * M_PI / 180),
+//							statePtr->z),
+//					// upVector
+//					TooN::makeVector(0.0, 0.0, -1.0), parameter_LineSpeed,
+//					parameter_StayTime);
+//			currentKI->setPointers(this, &controller);
+//			commandUnderstood = true;
+//			currentKIString = command;
+//		}
+// hover [ziquan]
+        else if (command == "hoverlog")
+        {
+            currentKI = new KIFlyTo(
+                    DronePosition(
+                            TooN::makeVector(statePtr->x, statePtr->y,
+                                    statePtr->z), statePtr->yaw),
+                    parameter_StayTime, parameter_MaxControl,
+                    parameter_InitialReachDist, parameter_StayWithinDist, true);
+            currentKI->setPointers(this, &controller);
+            commandUnderstood = true;
+            currentKIString = command;
+        }
+
+        else if (sscanf(command.c_str(),
+                "zigzagboard %f %f %f %f %f %f %f %f %f %f %f %f",
+                &parameters[0], &parameters[1], &parameters[2], &parameters[3],
+                &parameters[4], &parameters[5], &parameters[6], &parameters[7],
+                &parameters[8], &parameters[9], &parameters[10],
+                &parameters[11]) == 12)
+        {
+            currentKI = new KIZigZagBoard(
+                    TooN::makeVector(parameters[0], parameters[1],
+                            parameters[2]),
+                    TooN::makeVector(parameters[3], parameters[4],
+                            parameters[5]),
+                    TooN::makeVector(parameters[6], parameters[7],
+                            parameters[8]),
+                    TooN::makeVector(parameters[9], parameters[10],
+                            parameters[11]), 2,
+                    92.0 * 16 / sqrt(16 * 16 + 9 * 9),
+                    92.0 * 9 / sqrt(16 * 16 + 9 * 9));
+            currentKI->setPointers(this, &controller);
+            commandUnderstood = true;
+        }
         if (!commandUnderstood)
             ROS_INFO("unknown command, skipping!");
     }
-
 }
 
 void ControlNode::comCb(const std_msgs::StringConstPtr str)

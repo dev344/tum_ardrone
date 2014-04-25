@@ -125,6 +125,8 @@ set(AUTOPILOT_SOURCE_FILES
 	src/autopilot/KI/KIModel.cpp		# [ziquan]
 	src/autopilot/KI/MDP.cpp		# [ziquan]
 	src/autopilot/KI/KIRepsExe.cpp		# [ziquan]
+	src/autopilot/KI/KIRecover.cpp		# [ziquan]
+	src/autopilot/KI/KIZigZagBoard.cpp		# [ziquan]
 )
 set(AUTOPILOT_HEADER_FILES        
 	src/autopilot/ControlNode.h
@@ -140,6 +142,8 @@ set(AUTOPILOT_HEADER_FILES
 	src/autopilot/KI/KIModel.h		# [ziquan]
 	src/autopilot/KI/MDP.h			# [ziquan]
 	src/autopilot/KI/KIRepsExe.h		# [ziquan]
+	src/autopilot/KI/KIRecover.h	# [ziquan]
+	src/autopilot/KI/KIZigZagBoard.h		# [ziquan]
 	src/autopilot/KI/KIProcedure.h
 )
 

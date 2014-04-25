@@ -289,8 +289,6 @@ void PTAMWrapper::HandleFrame()
     TooN::Vector<10> filterPosePrePTAM = filter->getPoseAtAsVec(
             mimFrameTime_workingCopy - filter->delayVideo, true);
 
-    std::cout << filterPosePrePTAM << std::endl;
-
     pthread_mutex_unlock(&filter->filter_CS);
 
     // ------------------------ do PTAM -------------------------
@@ -344,12 +342,6 @@ void PTAMWrapper::HandleFrame()
     // 3. transform with filter
     TooN::Vector<6> PTAMResultTransformed = filter->transformPTAMObservation(
             PTAMResult);
-
-    std::cout << "sc " << filter->xy_scale << " " << filter->z_scale
-            << std::endl;
-    std::cout << "resul trans " << PTAMResultTransformed << std::endl
-            << std::endl;
-
     // init failed?
     if (mpTracker->lastStepResult == mpTracker->I_FAILED)
     {
@@ -557,13 +549,8 @@ void PTAMWrapper::HandleFrame()
     if (lockNextFrame && isGood)
     {
         // [Devesh] Adding few lines here
-        std::cout << "scales " << filter->xy_scale << " " << filter->z_scale
-                << std::endl;
-        std::cout << "p gues before " << PTAMPoseGuess << std::endl;
         PTAMPoseGuess = filter->backTransformPTAMObservation(
                 filterPosePrePTAM.slice<0, 6>());
-        std::cout << "p gues after " << PTAMPoseGuess << std::endl;
-        std::cout << "p res before " << PTAMResult << std::endl;
         predConvert->setPosRPY(PTAMPoseGuess[0], PTAMPoseGuess[1],
                 PTAMPoseGuess[2], PTAMPoseGuess[3], PTAMPoseGuess[4],
                 PTAMPoseGuess[5]);
@@ -572,7 +559,6 @@ void PTAMWrapper::HandleFrame()
         PTAMResult = TooN::makeVector(predConvert->x, predConvert->y,
                 predConvert->z, predConvert->roll, predConvert->pitch,
                 predConvert->yaw);
-        std::cout << "p res after " << PTAMResult << std::endl;
         PTAMResultTransformed = filter->transformPTAMObservation(PTAMResult);
         // [Devesh] till here.
 
@@ -929,7 +915,7 @@ TooN::Vector<3> PTAMWrapper::evalNavQue(unsigned int from, unsigned int to,
     int used = 0;
     int firstZ = 0;
 
-    float sum_first = 0, num_first = 0, sum_last = 0, num_last = 0;
+    int sum_first = 0, num_first = 0, sum_last = 0, num_last = 0;
     int pressureAverageRange = 100;
 
     for (std::deque<ardrone_autonomy::Navdata>::iterator cur =
@@ -1001,9 +987,11 @@ TooN::Vector<3> PTAMWrapper::evalNavQue(unsigned int from, unsigned int to,
         printf("scalePackage z corrupted (jump in meters: %.3f)!\n",
                 predIMUOnlyForScale->zCorruptedJump);
 
-    printf("first: %f (%f); last: %f (%f)=> diff: %f (z alt diff: %f)\n",
-            sum_first / num_first, num_first, sum_last / num_last, num_last,
-            sum_last / num_last - sum_first / num_first,
+    printf("first: %f (%d); last: %f (%d) => diff: %f (z alt diff: %f)\n",
+            (float) sum_first / (float) num_first, num_first,
+            (float) sum_last / (float) num_last, num_last,
+            (float) sum_last / (float) num_last
+                    - (float) sum_first / (float) num_first,
             predIMUOnlyForScale->z);
 
     *out_end_pressure = sum_last / num_last;
@@ -1280,8 +1268,16 @@ void PTAMWrapper::on_mouse_down(CVD::ImageRef where, int state, int button)
 {
     //double x = 4*(where.x/(double)this->myGLWindow->size().x - 0.5);
     //double y = -4*(where.y/(double)this->myGLWindow->size().y - 0.5);
-    double theta = 92.0
+    double angle_x = 92.0
             * ((double) where.x - 0.5 * (double) this->myGLWindow->size().x)
+            / sqrt(
+                    (double) this->myGLWindow->size().x
+                            * (double) this->myGLWindow->size().x
+                            + (double) this->myGLWindow->size().y
+                                    * (double) this->myGLWindow->size().y);
+
+    double angle_y = 92.0
+            * ((double) where.y - 0.5 * (double) this->myGLWindow->size().y)
             / sqrt(
                     (double) this->myGLWindow->size().x
                             * (double) this->myGLWindow->size().x
@@ -1293,10 +1289,29 @@ void PTAMWrapper::on_mouse_down(CVD::ImageRef where, int state, int button)
     node->publishCommand("c lockScaleFP");
 
     if (button == 1)
-        //snprintf(bf,100,"c moveByRel %.3f %.3f 0 0",x,y);
-        snprintf(bf, 100, "c moveByRel 0 0 0 %.3f", theta);
-    //else
-    //snprintf(bf,100,"c moveByRel 0 0 %.3f %.3f",y,x*45);
+    {
+        if (angle_y > 0)
+        {
+            snprintf(bf, 100, "c GSV_goto %.3f %.3f", angle_x, angle_y);
+        }
+        else
+        {
+            //snprintf(bf,100,"c moveByRel %.3f %.3f 0 0",x,y);
+            snprintf(bf, 100, "c moveByRel 0 0 0 %.3f", angle_x);
+        }
 
+    }
+    else
+    {
+        if (angle_y > 0)
+        {
+            snprintf(bf, 100, "c GSV_circle %.3f %.3f", angle_x, angle_y);
+        }
+        else
+        {
+            //snprintf(bf,100,"c moveByRel 0 0 %.3f %.3f",y,x*45);
+            snprintf(bf, 100, "c moveByRel 0 0 0 %.3f", angle_x);
+        }
+    }
     node->publishCommand(bf);
 }

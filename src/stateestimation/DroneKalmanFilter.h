@@ -44,6 +44,7 @@ public:
     double alphaSingleEstimate;
     double pp, ii, pi;
 
+    // equation (7) in paper, x is IMU, y is PTAM
     inline double computeEstimator(double spp, double sii, double spi,
             double stdDevPTAM = 0.2, double stdDevIMU = 0.1)
     {
@@ -55,7 +56,6 @@ public:
         if (tmp <= 0)
             tmp = 1e-5; // numeric issues
         return 0.5 * ((sII - sPP) + sqrt(tmp)) / (stdDevPTAM * stdDevPTAM * spi);
-
     }
 
     inline ScaleStruct(TooN::Vector<3> ptamDist, TooN::Vector<3> imuDist)
@@ -262,6 +262,12 @@ private:
     double xyz_sum_PTAMxIMU;
     double rp_offset_framesContributed;
     std::vector<ScaleStruct>* scalePairs;
+
+    // [ziquan] parameters for long lost
+    double last_x_IMU;
+    double last_y_IMU;
+    bool isSetLast_x_IMU;
+    bool isSetLast_y_IMU;
 
     // parameters used for height and yaw differentiation
     double last_yaw_IMU;

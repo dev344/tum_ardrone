@@ -90,7 +90,7 @@ void MapView::Render()
 
     // get new pose.
     pthread_mutex_lock(&filter->filter_CS);
-    lastFramePoseSpeed = filter->getCurrentPoseSpeedAsVec(); // Note: this is maybe an old pose, but max. one frame old = 50ms = not noticable.
+    lastFramePoseSpeed = filter->getCurrentPoseSpeedAsVec(); // Note: this is maybe an old pose, but max. one frame old = 50ms = not noticeable.
     pthread_mutex_unlock(&filter->filter_CS);
 
     if (clearTrail)
@@ -157,6 +157,50 @@ void MapView::Render()
         else
         {
             trailPoints.push_back(TrailPoint(lastFramePoseSpeed.slice<0, 3>()));
+                /*
+=======
+            trailPoints.push_back(
+                    TrailPoint(lastFramePoseSpeed.slice<0, 3>(), true));
+//			if(ptamWrapper->PTAMInitializedClock != 0 && getMS() - ptamWrapper->PTAMInitializedClock > 200)
+//			{
+//				TooN::Vector<3> PTAMScales = filter->getCurrentScales();
+//				TooN::Vector<3> PTAMOffsets = filter->getCurrentOffsets().slice<0,3>();
+//
+//				TooN::Vector<3> ptamPointPos = lastFramePoseSpeed.slice<0,3>();
+//				ptamPointPos -= PTAMOffsets;
+//				ptamPointPos /= PTAMScales[0];
+//
+//				trailPoints.push_back(TrailPoint(
+//					lastFramePoseSpeed.slice<0,3>(),
+//					ptamPointPos
+//				));
+//			}
+        }
+//		else if (ptamWrapper->PTAMStatus == ptamWrapper->PTAM_LOST
+//				|| ptamWrapper->PTAMStatus == ptamWrapper->PTAM_FALSEPOSITIVE) {
+//			trailPoints.push_back(
+//					TrailPoint(lastFramePoseSpeed.slice<0, 3>(), false));
+//			if(ptamWrapper->PTAMInitializedClock != 0 && getMS() - ptamWrapper->PTAMInitializedClock > 200)
+//			{
+//				TooN::Vector<3> PTAMScales = filter->getCurrentScales();
+//				TooN::Vector<3> PTAMOffsets = filter->getCurrentOffsets().slice<0,3>();
+//
+//				TooN::Vector<3> ptamPointPos = lastFramePoseSpeed.slice<0,3>();
+//				ptamPointPos -= PTAMOffsets;
+//				ptamPointPos /= PTAMScales[0];
+//
+//				trailPoints.push_back(TrailPoint(
+//					lastFramePoseSpeed.slice<0,3>(),
+//					ptamPointPos
+//				));
+//			}
+//		}
+        else
+        {
+            trailPoints.push_back(
+                    TrailPoint(lastFramePoseSpeed.slice<0, 3>(), false));
+>>>>>>> master
+*/
         }
     }
 
@@ -343,6 +387,40 @@ void MapView::drawTrail()
             glVertex3f((float) trailPoints[i].pointFilter[0],
                     (float) trailPoints[i].pointFilter[1],
                     (float) trailPoints[i].pointFilter[2]);
+                /*
+=======
+    //glColor4f(0, 1, 0, 0.6);
+
+    //TooN::Vector<3> PTAMScales = filter->getCurrentScales();
+    //TooN::Vector<3> PTAMOffsets = filter->getCurrentOffsets().slice<0, 3>();
+
+    for (unsigned int i = 1; i < trailPoints.size(); i++)
+    {
+        // [ziquan] glColor4f(1.0-(float)i/trailPoints.size(),1.0-(float)i/trailPoints.size(),1.0-(float)i/trailPoints.size(),1);
+//		if(trailPoints[i].PTAMValid)
+//		{
+//			trailPoints[i].pointFilter = trailPoints[i].pointPTAM;
+//			trailPoints[i].pointFilter[0] *= PTAMScales[0];
+//			trailPoints[i].pointFilter[1] *= PTAMScales[1];
+//			trailPoints[i].pointFilter[2] *= PTAMScales[2];
+//			trailPoints[i].pointFilter += PTAMOffsets;
+//		}
+        if (trailPoints[i].PTAMValid)
+        {
+            glColor4f(0, 1, 0, 0.6);
+        }
+        else
+        {
+            glColor4f(1, 0, 0, 0.6);
+        }
+        if (i > 1 && i < trailPoints.size() - 1)
+        {
+            glVertex3f((float) trailPoints[i].pointFilter[0],
+                    (float) trailPoints[i].pointFilter[1],
+                    (float) trailPoints[i].pointFilter[2]);
+        }
+>>>>>>> master
+*/
         glVertex3f((float) trailPoints[i].pointFilter[0],
                 (float) trailPoints[i].pointFilter[1],
                 (float) trailPoints[i].pointFilter[2]);

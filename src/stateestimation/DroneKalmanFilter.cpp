@@ -140,6 +140,9 @@ void DroneKalmanFilter::reset()
     // set statistic parameters to zero
     numGoodIMUObservations = 0;
 
+    // [ziquan]
+    isSetLast_x_IMU = isSetLast_y_IMU = false;
+
     // set last times to 0, indicating that there was no prev. package.
     lastIMU_XYZ_dronetime = lastIMU_RPY_dronetime = 0;
     lastIMU_dronetime = 0;
@@ -299,6 +302,24 @@ void DroneKalmanFilter::observeIMU_XYZ(const ardrone_autonomy::Navdata* nav)
         ROS_WARN(
                 "detected large y jump. removing. should not happen usually (only e.g. if no navdata for a long time, or agressive re-scaling)");
     }
+//	// [ziquan] doubi?
+//	if (isSetLast_x_IMU && abs(last_x_IMU - x.state[0]) > 0.2){// && last_x_IMU != 0) {
+//		// this happens if there was no navdata for a long time -> EKF variances got big -> new update leads to large jump in pos.
+//		ROS_WARN(
+//				"detected large x jump. removing. should not happen usually (only e.g. if no navdata for a long time, or aggressive re-scaling)");
+//		x.state[0] = last_x_IMU;
+//	} else {
+//		isSetLast_x_IMU = true;
+//		last_x_IMU = x.state[0];
+//	}
+//	if (isSetLast_y_IMU && abs(last_y_IMU - y.state[0]) > 0.2){// && last_y_IMU != 0) {
+//		ROS_WARN(
+//				"detected large y jump. removing. should not happen usually (only e.g. if no navdata for a long time, or aggressive re-scaling)");
+//		y.state[0] = last_y_IMU;
+//	} else {
+//		isSetLast_y_IMU = true;
+//		last_y_IMU = y.state[0];
+//	}
 
     // height is a bit more complicated....
     // only update every 8 packages, or if changed.
@@ -519,7 +540,10 @@ void DroneKalmanFilter::updateScaleXYZ(TooN::Vector<3> ptamDiff,
         TooN::Vector<3> imuDiff, TooN::Vector<3> OrgPtamPose)
 {
     if (allSyncLocked)
+    {
+        cout << "[ziquan] stop updateScaleXYZ" << endl;
         return;
+    }
 
     ScaleStruct s = ScaleStruct(ptamDiff, imuDiff);
 
@@ -581,7 +605,6 @@ void DroneKalmanFilter::updateScaleXYZ(TooN::Vector<3> ptamDiff,
             sumIIz += (*scalePairs)[i].imu[2] * (*scalePairs)[i].imu[2];
             sumPPz += (*scalePairs)[i].ptam[2] * (*scalePairs)[i].ptam[2];
             sumPIz += (*scalePairs)[i].ptam[2] * (*scalePairs)[i].imu[2];
-
             numIn++;
         }
         else
@@ -635,7 +658,8 @@ void DroneKalmanFilter::updateScaleXYZ(TooN::Vector<3> ptamDiff,
 
     scale_from_xy = scale_Filtered_xy;
     scale_from_z = scale_Filtered_z;
-    // update offsets such that no position change occurs (X = x_global*xy_scale_old + offset = x_global*xy_scale_new + new_offset)
+    //	update offsets such that no position change occurs (X = x_global*xy_scale_old + offset = x_global*xy_scale_new + new_offset)
+    //	[ziquan] std::cout << "[ziquan] inspect useScalingFixpoint : " << (useScalingFixpoint ? "true" : "false") << std::endl;
     if (useScalingFixpoint)
     {
         // fix at fixpoint
@@ -651,14 +675,18 @@ void DroneKalmanFilter::updateScaleXYZ(TooN::Vector<3> ptamDiff,
         z_offset += (xyz_scale_old - z_scale) * OrgPtamPose[2];
     }
     scale_xyz_initialized = true;
+
+    cout << "[ziquan] #scalePairs and scalingFixpoint and relative CI : "
+            << scalePairs->size() << " [" << scalingFixpoint[0] << ", "
+            << scalingFixpoint[1] << ", " << scalingFixpoint[2] << "] "
+            << getScaleAccuracy() << endl;
 }
 
 float DroneKalmanFilter::getScaleAccuracy()
 {
-    return 0.5
-            + 0.5
-                    * std::min(1.0,
-                            std::max(0.0, xyz_sum_PTAMxIMU * xy_scale / 4)); // scale-corrected PTAM x IMU
+    // [ziquan] proportional to the ratio between observed information and current scale, i.e. -l''(scale) / current scale
+    return 1.0 / std::sqrt(xyz_sum_IMUxIMU) / getCurrentScales()[0];
+    // return 0.5 + 0.5 * std::min(1.0, std::max(0.0, xyz_sum_PTAMxIMU * xy_scale / 4));// scale-corrected PTAM x IMU
 }
 
 void DroneKalmanFilter::predictUpTo(int timestamp, bool consume,
@@ -855,7 +883,6 @@ TooN::Vector<6> DroneKalmanFilter::transformPTAMObservation(TooN::Vector<6> obs)
 
     return obs;
 }
-
 TooN::Vector<6> DroneKalmanFilter::backTransformPTAMObservation(
         TooN::Vector<6> obs)
 {
@@ -864,9 +891,6 @@ TooN::Vector<6> DroneKalmanFilter::backTransformPTAMObservation(
     obs[5] -= yaw_offset;
 
     double yawRad = obs[5] * 3.14159268 / 180;
-    std::cerr << "back " << yaw_offset << " " << x_offset << " " << y_offset
-            << " " << z_offset << " " << yawRad << " " << xy_scale << " "
-            << z_scale << " " << std::endl;
     obs[0] = (-x_offset + obs[0] + 0.2 * sin(yawRad)) / xy_scale;
     obs[1] = (-y_offset + obs[1] + 0.2 * cos(yawRad)) / xy_scale;
     obs[2] = (-z_offset + obs[2]) / z_scale;
@@ -969,6 +993,11 @@ void DroneKalmanFilter::setCurrentScales(TooN::Vector<3> scales)
     xyz_sum_IMUxIMU = 0.2 * scales[0];
     xyz_sum_PTAMxPTAM = 0.2 / scales[0];
     xyz_sum_PTAMxIMU = 0.2;
+// <<<<<<< HEAD
+//     xyz_sum_IMUxIMU = 0.04 * scales[0]; // [ziquan] 0.2 * scales[0];
+//     xyz_sum_PTAMxPTAM = 0.04 / scales[0]; // [ziquan] 0.2 / scales[0];
+//     xyz_sum_PTAMxIMU = 0.04; // [ziquan] 0.2;
+// >>>>>>> master
 
     (*scalePairs).clear();
 

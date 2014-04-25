@@ -95,6 +95,10 @@ public:
     {
         predictedCFromW = camFromW;
     }
+    inline void setPriorCamFromW(SE3<>& camFromW)
+    {
+        mse3CamFromWorld = camFromW;
+    }
     inline void setLastFrameLost(bool lost, bool useGuessForRecovery = false)
     {
         lastFrameLost = lost;

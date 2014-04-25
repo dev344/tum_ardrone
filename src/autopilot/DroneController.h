@@ -23,8 +23,11 @@
 
 #include "TooN/se3.h"
 #include <queue>
+#include <deque>
 #include "geometry_msgs/Twist.h"
 #include "tum_ardrone/filter_state.h"
+
+using namespace std;
 
 class ControlNode;
 

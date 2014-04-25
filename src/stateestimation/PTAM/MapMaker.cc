@@ -227,9 +227,7 @@ bool MapMaker::InitFromStereo(KeyFrame &kF, KeyFrame &kS,
         vMatches.push_back(m);
     }
 
-    // cerr << "------------------------------------------------" << endl;
     ss << "-------" << endl;
-    // cerr << "Number of matches :" << vMatches.size() << endl;
     ss << "Matches: " << vMatches.size() << endl;
 
     SE3<> se3;
@@ -250,21 +248,6 @@ bool MapMaker::InitFromStereo(KeyFrame &kF, KeyFrame &kS,
                     - KFOneDesiredCamFromWorld.get_translation())
                     * (KFZeroDesiredCamFromWorld.get_translation()
                             - KFOneDesiredCamFromWorld.get_translation())));
-
-    cerr << "SE3 Translation:" << se3.get_translation() << endl;
-    cerr << "SE3 rotation:" << se3.get_rotation() << endl;
-    cerr << "KFZeroDesiredCamFromWorld Translation:"
-            << KFZeroDesiredCamFromWorld.get_translation() << endl;
-    cerr << "KFZeroDesiredCamFromWorld rotation:"
-            << KFZeroDesiredCamFromWorld.get_rotation() << endl;
-    cerr << "KFOneDesiredCamFromWorld Translation:"
-            << KFOneDesiredCamFromWorld.get_translation() << endl;
-    cerr << "KFOneDesiredCamFromWorld rotation:"
-            << KFOneDesiredCamFromWorld.get_rotation() << endl;
-    cout << "dTransMagn: " << dTransMagn << endl;
-    cout << "dTransIMUMagn: " << dTransIMUMagn << endl;
-    // cerr << "dTransMagn: " << dTransMagn << endl;
-    // cerr << "dTransIMUMagn: " << dTransIMUMagn << endl;
 
     ss << "dTransMagn: " << dTransMagn << endl;
     ss << "dTransIMUMagn: " << dTransIMUMagn << endl;
@@ -328,9 +311,6 @@ bool MapMaker::InitFromStereo(KeyFrame &kF, KeyFrame &kS,
         finder.MakeTemplateCoarseNoWarp(*p);
         finder.MakeSubPixTemplate();
         finder.SetSubPixPos(vec(vTrailMatches[i].second));
-        // cerr << "vTrailMatches[i].first: " << vTrailMatches[i].first << endl;
-        // cerr << "vTrailMatches[i].second: " << vTrailMatches[i].second << endl;
-
         ss << "first: " << vTrailMatches[i].first << endl;
         ss << "second: " << vTrailMatches[i].second << endl;
 
@@ -343,44 +323,10 @@ bool MapMaker::InitFromStereo(KeyFrame &kF, KeyFrame &kS,
 
         // Triangulate point:
         TooN::Vector<2> v2SecondPos = finder.GetSubPixPos();
-        // cerr << "v2SecondPos: " << finder.GetSubPixPos() << endl;
         ss << "v2SecondPos: " << finder.GetSubPixPos() << endl;
         p->v3WorldPos = ReprojectPoint(se3, mCamera.UnProject(v2SecondPos),
                 vMatches[i].v2CamPlaneFirst);
-        // cerr << "v3WorldPos: " << p->v3WorldPos << endl << endl;
-
         ss << "v3WorldPos: " << p->v3WorldPos << endl << endl;
-
-        /**************************
-         Devesh is experimenting here.
-         Point3f result;
-         vector<Point2f> match_pair(2);
-         vector<Mat> Rs_k(2), ts_k(2);
-
-         match_pair[0].x = vTrailMatches[i].first.x;
-         match_pair[0].y = vTrailMatches[i].first.y;
-         match_pair[1].x = v2SecondPos[0];
-         match_pair[1].y = v2SecondPos[1];
-
-         Rs_k[0] = (Mat_<double>(3,3) << 1, 0, 0, 0, 1, 0, 0, 0, 1);
-         TooN::Matrix<3> rot = se3.get_rotation().get_matrix();
-         Rs_k[1] = (Mat_<double>(3,3) <<
-         rot[0][0], rot[0][1], rot[0][2],
-         rot[1][0], rot[1][1], rot[1][2],
-         rot[2][0], rot[2][1], rot[2][2]);
-
-         ts_k[0] = (Mat_<double>(3,1) << 0, 0, 0);
-         ts_k[1] = (Mat_<double>(3,1) << se3.get_translation()[0],
-         se3.get_translation()[1],
-         se3.get_translation()[2]);
-         Mat cameraMatrix = (Mat_<double>(3,3) <<
-         514.720928, 0.000000, 376.886810,
-         0.000000, 566.574217, 71.489214,
-         0.000000, 0.000000, 1.000000);
-         // cerr << "Re ";
-         result = triangulatePoint(match_pair, Rs_k, ts_k, cameraMatrix);
-         // cerr << result << endl;
-         **************************/
 
         if (p->v3WorldPos[2] < 0.0)
         {
@@ -424,11 +370,6 @@ bool MapMaker::InitFromStereo(KeyFrame &kF, KeyFrame &kS,
     RefreshSceneDepth(pkSecond);
     mdWiggleScaleDepthNormalized = mdWiggleScale / pkFirst->dSceneDepthMean;
 
-    // cerr << "pkFirst->dSceneDepthMean:" << pkFirst->dSceneDepthMean << endl;
-    // cerr << "pkSecond->dSceneDepthMean:" << pkSecond->dSceneDepthMean << endl;
-    // cerr << "pkFirst->dSceneDepthSigma:" << pkFirst->dSceneDepthSigma << endl;
-    // cerr << "pkSecond->dSceneDepthSigma:" << pkSecond->dSceneDepthSigma << endl;
-
     ss << "FirstDepthMean:" << pkFirst->dSceneDepthMean << endl;
     ss << "FirstDepthSigma:" << pkFirst->dSceneDepthSigma << endl;
     ss << "SecondDepthMean:" << pkSecond->dSceneDepthMean << endl;
@@ -438,8 +379,8 @@ bool MapMaker::InitFromStereo(KeyFrame &kF, KeyFrame &kS,
     ss.str(std::string()); // Clearing for next use.
     chatter_pub.publish(msg);
 
-    CVD::img_save(kF.aLevels[0].im, "/home/relab/im1.png");
-    CVD::img_save(kS.aLevels[0].im, "/home/relab/im2.png");
+    // CVD::img_save(kF.aLevels[0].im, "/home/relab/im1.png");
+    // CVD::img_save(kS.aLevels[0].im, "/home/relab/im2.png");
 
     AddSomeMapPoints(0);
     AddSomeMapPoints(3);
@@ -468,6 +409,15 @@ bool MapMaker::InitFromStereo(KeyFrame &kF, KeyFrame &kS,
     ApplyGlobalScaleToMap(1 / pkFirst->dSceneDepthMean);
     initialScaleFactor *= pkFirst->dSceneDepthMean;
     ApplyGlobalTransformationToMap(KFZeroDesiredCamFromWorld.inverse());
+    /*
+=======
+    ApplyGlobalTransformationToMap(KFZeroDesiredCamFromWorld.inverse());
+    printf("PTAM Init: re-scaling map with %f\n",
+            0.1 / pkFirst->dSceneDepthMean);
+    ApplyGlobalScaleToMap(1 / pkFirst->dSceneDepthMean);
+    initialScaleFactor *= pkFirst->dSceneDepthMean;
+>>>>>>> master
+    */
 
     mMap.bGood = true;
     se3TrackerPose = pkSecond->se3CfromW;
@@ -1416,7 +1366,6 @@ void MapMaker::GUICommandHandler(string sCommand, string sParams) // Called by t
         cout << "  ... done saving map." << endl;
         return;
     }
-
     cout << "! MapMaker::GUICommandHandler: unhandled command " << sCommand
             << endl;
     exit(1);

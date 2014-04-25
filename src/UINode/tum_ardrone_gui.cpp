@@ -420,25 +420,25 @@ ControlCommand tum_ardrone_gui::calcKBControl()
     if (isPressed[7])
         c.gaz = -sensRP; // a
     if (isPressed[8])
-        c.pitch = 0.01 * sensRP; // 0
+        c.pitch = sensRP; // 0
     if (isPressed[9])
-        c.pitch = sensRP; // 1
+        c.pitch = 0.001 * sensRP; // 1
     if (isPressed[10])
-        c.pitch = 0.75 * sensRP; // 2
+        c.pitch = 0.005 * sensRP; // 2
     if (isPressed[11])
-        c.pitch = 0.50 * sensRP; // 3
+        c.pitch = 0.01 * sensRP; // 3
     if (isPressed[12])
-        c.pitch = 0.25 * sensRP; // 4
+        c.pitch = 0.02 * sensRP; // 4
     if (isPressed[13])
-        c.pitch = 0; // 5
+        c.pitch = 0.03 * sensRP; // 5
     if (isPressed[14])
-        c.pitch = -0.25 * sensRP; // 6
+        c.pitch = 0.04 * sensRP; // 6
     if (isPressed[15])
-        c.pitch = -0.50 * sensRP; // 7
+        c.pitch = 0.05 * sensRP; // 7
     if (isPressed[16])
-        c.pitch = -0.75 * sensRP; // 8
+        c.pitch = 0.1 * sensRP; // 8
     if (isPressed[17])
-        c.pitch = -sensRP; // 9
+        c.pitch = 0.2 * sensRP; // 9
 
     return c;
 }

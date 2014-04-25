@@ -86,7 +86,7 @@ void Tracker::Reset()
 
 // TrackFrame is called by System.cc with each incoming video frame.
 // It figures out what state the tracker is in, and calls appropriate internal tracking
-// functions. bDraw tells the tracker wether it should output any GL graphics
+// functions. bDraw tells the tracker whether it should output any GL graphics
 // or not (it should not draw, for example, when AR stuff is being shown.)
 void Tracker::TrackFrame(Image<byte> &imFrame, bool bDraw)
 {
@@ -282,7 +282,7 @@ bool Tracker::AttemptRecovery()
     }
 }
 
-// Draw the reference grid to give the user an idea of wether tracking is OK or not.
+// Draw the reference grid to give the user an idea of whether tracking is OK or not.
 void Tracker::RenderGrid()
 {
     // The colour of the ref grid shows if the coarse stage of tracking was used
@@ -446,7 +446,7 @@ void Tracker::TrackForInitialMap()
         {
             lastStepResult = INITIALIZING;
             mMessageForUser
-                    << "Devesh says - Translate the camera slowly sideways, and press spacebar again to perform stereo init."
+                    << "Translate the camera slowly sideways, and press spacebar again to perform stereo init."
                     << endl;
         }
     }
@@ -1126,8 +1126,6 @@ void Tracker::ApplyMotionModel()
         }
         //mse3CamFromWorld = mPredictor.globalToFront;
     }
-    std::cerr << "AMM\n" << mse3CamFromWorld.get_translation() << std::endl;
-    std::cerr << mse3CamFromWorld.get_rotation() << std::endl;
 }
 ;
 
@@ -1207,6 +1205,16 @@ void Tracker::AssessTrackingQuality()
         else
             mTrackingQuality = DODGY;
 
+/*
+=======
+        if (dTotalFracFound > *gvdQualityGood)
+            mTrackingQuality = GOOD;
+        else if (dLargeFracFound < *gvdQualityLost)
+            mTrackingQuality = BAD;
+        else
+            mTrackingQuality = DODGY;
+>>>>>>> master
+*/
     }
 
     if (mTrackingQuality == DODGY)
