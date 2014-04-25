@@ -79,6 +79,7 @@ class EventListener(DroneVideoDisplay):
         self.location_history = dict()
 
         self.sorted_mappoints = []
+        self.objects = []
 
     # Dynamic GUI change code here
     def createButtons(self):
@@ -136,6 +137,7 @@ class EventListener(DroneVideoDisplay):
             elif key == KeyMapping.Clear:
                 self.points = []
                 self.circles = []
+                self.small_circles = []
                 self.tum_ardrone_pub.publish(String("p reset"))
 
                 self.scale_rcv_count = 0
@@ -203,9 +205,34 @@ class EventListener(DroneVideoDisplay):
 
     def mouseReleaseEvent(self, event):
         clear_pane = True
-        if len(self.points) > 40:
+        if len(self.points) > 20:
             self.parseGesture()
-            if self.gesture == self.D_TO_UP:
+            if self.gesture == self.CIRCLE:
+                print "CIRCLE"
+
+                average_point = QtCore.QPoint(0, 0)
+                for point in self.points:
+                    average_point += point
+                average_point /= len(self.points)
+                print "Average point is", average_point.x(), average_point.y()
+
+                # rad_point average will be 2/pi fraction of the radius.
+                rad_point = QtCore.QPoint(0, 0)
+                for point in self.points:
+                    rad_point.setX(rad_point.x() + abs(average_point.x() - point.x()))
+                    rad_point.setY(rad_point.y() + abs(average_point.y() - point.y()))
+                rad_point /= len(self.points)
+
+                print "rad point", rad_point.x(), rad_point.y()
+
+                self.circles.append([average_point.x(), average_point.y(), \
+                        (rad_point.x() + rad_point.y())/2, [255, 255, 255, 70]])
+
+                if len(self.circles) == 4:
+                    self.sendZigZagDirections3()
+                    self.circles = []
+
+            elif self.gesture == self.D_TO_UP:
                 print "D_TO_UP"
                 self.publisher.publish(String("D_TO_UP"))
             elif self.gesture == self.UP_TO_D:
@@ -249,8 +276,8 @@ class EventListener(DroneVideoDisplay):
                 self.centralWidget.clickedLabel = -1
 
     def mouseDoubleClickEvent(self, event):
-        print "scale", self.scale, "and pts"
-        print self.sorted_mappoints
+        print "scale", self.scale
+        print self.objects
         """
         frame = self.bridge.imgmsg_to_cv(self.image, 'bgr8')
         cv_image = np.array(frame, dtype=np.uint8)        
@@ -310,6 +337,31 @@ class EventListener(DroneVideoDisplay):
 
     def turn_rightReleased(self):
         controller.SetCommand(0, 0, 0, 0)
+
+    def sendZigZagDirections3(self):
+        print "Here, I'll give closest points to the following four points"
+        print self.circles
+        print len(self.sorted_mappoints)
+
+        # Assuming the usual A,B,C,D cyclic quadrilateral.
+        left_boundry = (self.circles[0][0] + self.circles[3][0])/2
+        right_boundry = (self.circles[1][0] + self.circles[2][0])/2
+        upper_boundry = (self.circles[0][1] + self.circles[1][1])/2
+        lower_boundry = (self.circles[2][1] + self.circles[3][1])/2
+
+        # to be deleted 
+        print left_boundry, right_boundry, upper_boundry, lower_boundry
+
+        for obj in self.objects:
+            midpoint = obj['midpoint']
+            if left_boundry < midpoint.x() and \
+               midpoint.x() < right_boundry and \
+               upper_boundry < midpoint.y() and \
+               midpoint.y() < lower_boundry:
+                   print "Interested object is", midpoint
+                   for circle in self.circles:
+                       # Send each of these to the controller
+                       print self.find_closest_mappoint(circle, obj['points'])
 
     def sendZigZagDirections2(self):
         # tan (32 degrees) = 0.72 but I am using a smaller number (0.62)
@@ -417,16 +469,20 @@ class EventListener(DroneVideoDisplay):
         points = []
         for line in split_data:
             numbers = line.split()
-            if len(numbers) > 2:
-                x = float(numbers[0])
-                y = float(numbers[1])
+            if len(numbers) > 4:
+                # x_i, y_i are image co-ords.
+                # z, x, y are PTAM co-ords in cur frame.
+                x_i = float(numbers[0])
+                y_i = float(numbers[1])
                 z = float(numbers[2])
-                all_points.append([y, x, z])
-                if 60 < x and x < 580:
-                    if 20 < y and y < 340:
-                        points.append([x, y, z])
+                x = float(numbers[3])
+                y = float(numbers[4])
+                all_points.append([x_i, y_i, z, x, y])
+                if 60 < x_i and x_i < 580:
+                    if 20 < y_i and y_i < 340:
+                        points.append([x_i, y_i, z, x, y])
         
-        points.sort(key= lambda x: x[2])
+        points.sort(key= lambda tupl: tupl[2])
 
         self.sorted_mappoints = points[:]
 
@@ -442,8 +498,10 @@ class EventListener(DroneVideoDisplay):
                    [200, 160, 190, 200],
                    [250, 200, 0, 200],
                    [250, 60, 0, 200] ]
-        self.circles = []
+        self.small_circles = []
+        self.objects = []
         if len(points) > 0:
+            av_point = QtCore.QPoint(0, 0)
             cur_partition_elems = []
             partition_count = 0
             current_population = 0
@@ -452,16 +510,27 @@ class EventListener(DroneVideoDisplay):
                 if abs(point[2]-current) < 0.1:
                     current_population += 1
                     cur_partition_elems.append(point)
+                    av_point.setX(av_point.x() + point[0])
+                    av_point.setY(av_point.y() + point[1])
                 else:
                     if current_population > 3:
                         partition_count += 1
                         for elem in cur_partition_elems:
+                            # We have only 4 colors for now. So, 3 colors for 1st 
+                            # 3 objects and last one for remaining all.
                             if partition_count < 4:
-                                self.circles.append([elem[0], elem[1], 3, colors[partition_count-1]])
+                                self.small_circles.append([elem[0], elem[1], 3, colors[partition_count-1]])
                             else:
-                                self.circles.append([elem[0], elem[1], 3, colors[3]])
+                                self.small_circles.append([elem[0], elem[1], 3, colors[3]])
+                        # Add object midpoint and points into objects list.
+                        av_point /= len(cur_partition_elems)
+                        obj = {}
+                        obj['midpoint'] = av_point
+                        obj['points'] = cur_partition_elems[:]
+                        self.objects.append(obj)
                     current_population = 0
                     cur_partition_elems = []
+                    av_point = QtCore.QPoint(0, 0)
                 current = point[2]
 
     def scale_callback(self, data):
@@ -490,16 +559,11 @@ class EventListener(DroneVideoDisplay):
         elif self.upToDownMotion() :
             self.gesture = self.UP_TO_D
 
-        average_point = QtCore.QPoint(0, 0)
-        for point in self.points:
-            average_point += point
-        average_point /= len(self.points)
-        print "Average point is", average_point.x(), average_point.y()
-        if self.points[-1].y() < average_point.y() - 20:
-            if self.gesture == self.R_TO_L:
-                self.gesture = self.R_TO_L_SEMI
-            elif self.gesture == self.L_TO_R:
-                self.gesture = self.L_TO_R_SEMI
+        # if self.points[-1].y() < average_point.y() - 20:
+        #     if self.gesture == self.R_TO_L:
+        #         self.gesture = self.R_TO_L_SEMI
+        #     elif self.gesture == self.L_TO_R:
+        #         self.gesture = self.L_TO_R_SEMI
 
     ######################################
     # Functions used to parse the type of
@@ -578,6 +642,23 @@ class EventListener(DroneVideoDisplay):
         else:
             return False
 
+    def find_closest_mappoint(self, circle, obj_mappoints):
+        if len(obj_mappoints) < 2:
+            print "This cannot happen. Bug detected!"
+            return
+        shortest_distance = 10000
+        closest_point = obj_mappoints[0]
+        centre_x = circle[0]
+        centre_y = circle[1]
+        for mappoint in obj_mappoints:
+            distance = (centre_x - mappoint[0])**2 + \
+                       (centre_y - mappoint[1])**2
+            if distance < shortest_distance:
+                shortest_distance = distance
+                closest_point = mappoint 
+
+        return closest_point
+            
 
 # Setup the application
 if __name__=='__main__':

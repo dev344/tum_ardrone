@@ -137,6 +137,7 @@ class DroneVideoDisplay(QtGui.QMainWindow):
         self.tagLock = Lock()
 
         self.circles = []
+        self.small_circles = []
         self.points = []
         self.qimages = []
         self.initQimages()
@@ -194,6 +195,11 @@ class DroneVideoDisplay(QtGui.QMainWindow):
                 painter.setBrush(QtGui.QColor(*color))
                 qpoint = QtCore.QPoint(x, y)
                 painter.drawEllipse(qpoint, d, d)
+            for (x, y, d, color) in self.small_circles:
+                painter.setPen(QtGui.QColor(*color))
+                painter.setBrush(QtGui.QColor(*color))
+                qpoint = QtCore.QPoint(x, y)
+                painter.drawEllipse(qpoint, d, d)
             painter.end()
         finally:
             self.tagLock.release()
@@ -226,7 +232,7 @@ class DroneVideoDisplay(QtGui.QMainWindow):
 
                     if len(self.points) > 0:
                         self.DrawPoints()
-                    if len(self.circles) > 0:
+                    if (len(self.circles) + len(self.small_circles)) > 0:
                         self.DrawCircles()
                     if len(self.tags) > 0:
                         self.tagLock.acquire()

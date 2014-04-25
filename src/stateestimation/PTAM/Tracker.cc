@@ -913,8 +913,12 @@ void Tracker::TrackMap()
                 dSum += z;
                 dSumSq += z * z;
                 nNum++;
+                // x_i, y_i, z, x, y.
+                // where x_i, y_i are image co-ords.
+                // z, x, y are 3d co-ords relative to cur cam frame.
                 ss << (*it)->v2Found[0] << " " << (*it)->v2Found[1] << " "
-                        << (*it)->v3Cam[2] << endl;
+                        << (*it)->v3Cam[2] << " " << (*it)->v3Cam[0] << " " 
+                        << (*it)->v3Cam[1] << endl;
             };
         if (nNum > 20)
         {

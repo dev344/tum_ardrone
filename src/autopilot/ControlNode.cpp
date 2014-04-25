@@ -844,13 +844,13 @@ void ControlNode::popNextCommand(
         {
             currentKI = new KIZigZagBoard(
                     TooN::makeVector(parameters[0], parameters[1],
-                            parameters[2]),
+                            parameters[2]) + parameter_referenceZero.pos,
                     TooN::makeVector(parameters[3], parameters[4],
-                            parameters[5]),
+                            parameters[5]) + parameter_referenceZero.pos,
                     TooN::makeVector(parameters[6], parameters[7],
-                            parameters[8]),
+                            parameters[8]) + parameter_referenceZero.pos,
                     TooN::makeVector(parameters[9], parameters[10],
-                            parameters[11]), 2,
+                            parameters[11]) + parameter_referenceZero.pos, 2,
                     92.0 * 16 / sqrt(16 * 16 + 9 * 9),
                     92.0 * 9 / sqrt(16 * 16 + 9 * 9));
             currentKI->setPointers(this, &controller);
