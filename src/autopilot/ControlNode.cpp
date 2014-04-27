@@ -838,19 +838,44 @@ void ControlNode::popNextCommand(
         else if (sscanf(command.c_str(),
                 "zigzagboard %f %f %f %f %f %f %f %f %f %f %f %f",
                 &parameters[0], &parameters[1], &parameters[2], &parameters[3],
-                &parameters[4], &parameters[5], &parameters[6], &parameters[7],
-                &parameters[8], &parameters[9], &parameters[10],
-                &parameters[11]) == 12)
+                &parameters[4], &parameters[5], &parameters[9], &parameters[10],
+                &parameters[11], &parameters[6], &parameters[7],
+                &parameters[8]) == 12)
         {
+            // acos(yaw) - bsin(yaw), asin(yaw) + bcos(yaw)
+            // statePtr->yaw is clockwise. So, I take negative of it.
             currentKI = new KIZigZagBoard(
-                    TooN::makeVector(parameters[0], parameters[1],
-                            parameters[2]) + parameter_referenceZero.pos,
-                    TooN::makeVector(parameters[3], parameters[4],
-                            parameters[5]) + parameter_referenceZero.pos,
-                    TooN::makeVector(parameters[6], parameters[7],
-                            parameters[8]) + parameter_referenceZero.pos,
-                    TooN::makeVector(parameters[9], parameters[10],
-                            parameters[11]) + parameter_referenceZero.pos, 2,
+                    TooN::makeVector(
+                            parameters[0] * cos(-statePtr->yaw * PI / 180) - 
+                                parameters[1] * sin(-statePtr->yaw * PI / 180),
+                            parameters[0] * sin(-statePtr->yaw * PI / 180) + 
+                                parameters[1] * cos(-statePtr->yaw * PI / 180),
+                            parameters[2]) +
+                        parameter_referenceZero.pos,
+
+                    TooN::makeVector(
+                            parameters[3] * cos(-statePtr->yaw * PI / 180) - 
+                                parameters[4] * sin(-statePtr->yaw * PI / 180),
+                            parameters[3] * sin(-statePtr->yaw * PI / 180) + 
+                                parameters[4] * cos(-statePtr->yaw * PI / 180),
+                            parameters[5]) +
+                        parameter_referenceZero.pos,
+
+                    TooN::makeVector(
+                            parameters[6] * cos(-statePtr->yaw * PI / 180) - 
+                                parameters[7] * sin(-statePtr->yaw * PI / 180),
+                            parameters[6] * sin(-statePtr->yaw * PI / 180) + 
+                                parameters[7] * cos(-statePtr->yaw * PI / 180),
+                            parameters[8]) +
+                        parameter_referenceZero.pos,
+                    TooN::makeVector(
+                            parameters[9] * cos(-statePtr->yaw * PI / 180) - 
+                                parameters[10] * sin(-statePtr->yaw * PI / 180),
+                            parameters[9] * sin(-statePtr->yaw * PI / 180) + 
+                                parameters[10] * cos(-statePtr->yaw * PI / 180),
+                            parameters[11]) +
+                        parameter_referenceZero.pos, 
+                    2,
                     92.0 * 16 / sqrt(16 * 16 + 9 * 9),
                     92.0 * 9 / sqrt(16 * 16 + 9 * 9));
             currentKI->setPointers(this, &controller);

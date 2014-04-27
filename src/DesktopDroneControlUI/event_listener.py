@@ -249,7 +249,7 @@ class EventListener(DroneVideoDisplay):
                 self.resetQimages()
                 self.centralWidget.setZigzagLayout()
                 # self.publisher.publish(String("ZIGZAG"))
-                self.sendZigZagDirections2()
+                self.sendZigZagDirections()
                 print "ZIGZAG"
             elif self.gesture == self.RZIGZAG:
                 self.resetQimages()
@@ -351,17 +351,32 @@ class EventListener(DroneVideoDisplay):
 
         # to be deleted 
         print left_boundry, right_boundry, upper_boundry, lower_boundry
+        commands = ['clearCommands', 'lockScaleFP', 'setReference $POSE$']
 
+        object_found = False
         for obj in self.objects:
             midpoint = obj['midpoint']
             if left_boundry < midpoint.x() and \
                midpoint.x() < right_boundry and \
                upper_boundry < midpoint.y() and \
                midpoint.y() < lower_boundry:
+                   object_found = True
                    print "Interested object is", midpoint
+                   command = 'zigzagboard'
                    for circle in self.circles:
                        # Send each of these to the controller
-                       print self.find_closest_mappoint(circle, obj['points'])
+                       corner_point = self.find_closest_mappoint(circle, obj['points'])
+                       print corner_point
+                       command += (' ' + str(self.scale * corner_point[3]) + #relative x distance
+                                  ' ' + str(self.scale * corner_point[2]) + #relative depth(y) dist
+                                  ' ' + str(-self.scale * corner_point[4]) )#relative height(z) dist
+                   commands.append(command)
+
+        if object_found:
+            commands.append('land')
+            commands.append('start')
+            for command in commands:
+                self.tum_ardrone_pub.publish(String("c " + command))
 
     def sendZigZagDirections2(self):
         # tan (32 degrees) = 0.72 but I am using a smaller number (0.62)
@@ -369,7 +384,7 @@ class EventListener(DroneVideoDisplay):
 
         self.location_history = dict()
         heights = [0.5, 0, -0.5]
-        commands = ['clearCommands', 'lockScaleFP', 'setLineSpeed 0.2', 'setReference $POSE$', 'setStayTime 1']
+        commands = ['clearCommands', 'lockScaleFP', 'setLineSpeed 0.5', 'setReference $POSE$', 'setStayTime 1']
 
         commands.append('goAlongRelDir ' + str(-half_distance) + ' 0 0.5 0')
         commands.append('snap 0')
