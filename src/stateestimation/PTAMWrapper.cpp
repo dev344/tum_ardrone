@@ -521,8 +521,13 @@ void PTAMWrapper::HandleFrame()
                 diffIMU.slice<0, 2>() *= xyFactor;
                 diffIMU[2] *= zFactor;
 
-                filter->updateScaleXYZ(diffPTAM, diffIMU,
-                        PTAMResult.slice<0, 3>());
+                // [Devesh]
+                // Hacking to lock scale after we are certain of its
+                // accuracy.
+                if (filter->getScaleAccuracy() > 0.15){
+                    filter->updateScaleXYZ(diffPTAM, diffIMU,
+                            PTAMResult.slice<0, 3>());
+                }
                 mpMapMaker->currentScaleFactor = filter->getCurrentScales()[0];
 
                 ss << "s " << filter->getCurrentScales()[0] << std::endl;

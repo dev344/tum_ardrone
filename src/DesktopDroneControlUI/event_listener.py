@@ -276,8 +276,12 @@ class EventListener(DroneVideoDisplay):
                 self.centralWidget.clickedLabel = -1
 
     def mouseDoubleClickEvent(self, event):
+        print event.x(), event.y()
         print "scale", self.scale
-        print self.objects
+        object_point = self.find_closest_mappoint([event.x(), event.y()], self.sorted_mappoints)
+        print "mappoint", object_point
+        radius = self.scale * object_point[2]
+        self.sendCircleDirections(radius)
         """
         frame = self.bridge.imgmsg_to_cv(self.image, 'bgr8')
         cv_image = np.array(frame, dtype=np.uint8)        
@@ -338,6 +342,18 @@ class EventListener(DroneVideoDisplay):
     def turn_rightReleased(self):
         controller.SetCommand(0, 0, 0, 0)
 
+    def sendCircleDirections(self, radius):
+        commands = ['clearCommands', 'lockScaleFP', 'setReference $POSE$', 'setLineSpeed 0.3', 'setStayTime 25']
+        commands.append('circleR 0 ' + str(radius) + ' 0')
+
+
+        # TODO: Make a function out of the following 4 lines.
+        # (and may be even the line initializing commands list.
+        commands.append('land')
+        commands.append('start')
+        for command in commands:
+            self.tum_ardrone_pub.publish(String("c " + command))
+
     def sendZigZagDirections3(self):
         print "Here, I'll give closest points to the following four points"
         print self.circles
@@ -377,6 +393,7 @@ class EventListener(DroneVideoDisplay):
             commands.append('start')
             for command in commands:
                 self.tum_ardrone_pub.publish(String("c " + command))
+                print command
 
     def sendZigZagDirections2(self):
         # tan (32 degrees) = 0.72 but I am using a smaller number (0.62)

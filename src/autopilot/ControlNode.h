@@ -65,7 +65,6 @@ private:
 
     // [Devesh] 
     std::string interface_channel;
-    ros::Publisher interface_directions_pub;
 
 	// command queue & KI stuff
 	std::deque<std::string> commandQueue;
@@ -99,6 +98,8 @@ public:
 	ControlNode();
 	~ControlNode();
 
+    // [Devesh]
+    ros::Publisher interface_directions_pub;
 
 	// ROS message callbacks
 	void droneposeCb(const tum_ardrone::filter_stateConstPtr statePtr);
