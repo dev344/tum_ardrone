@@ -21,16 +21,16 @@ private:
 	double mdYawAngle;
 
 	vector<vector<TooN::Vector<3> > > mvvv3WayPoints;
-	queue<DronePosition> qPoses;
+	vector<DronePosition> mvPoses;
+	int miCurrentPoseNum;
 
-	int reachedAtClock;
-	bool reached;
-	bool isStarted;
+	//int reachedAtClock;
+	//bool reached;
 	bool isCompleted;
 
-	int stayTimeMs;
-	double initialReachedDist;
-	double stayWithinDist;
+	//int stayTimeMs;
+	double reachedDist;
+	//double stayWithinDist;
 
 	DronePosition checkpoint;
 
