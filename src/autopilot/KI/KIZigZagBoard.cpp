@@ -166,30 +166,23 @@ KIZigZagBoard::KIZigZagBoard(TooN::Vector<3> topLPoint,
         mvvv3WayPoints[i].push_back(rightMostWayPoints[i]);
     }
     
-    cout << "waypoints: \t" << endl;
+    cout << "Waypoints: \t" << endl;
 	for (int i = 0; i < miNumOfRows; i++) {
 		for (int j = 0; j < miNumOfCols; j++) {
 			if (i % 2 == 0) {
-				qPoses.push(DronePosition(mvvv3WayPoints[i][j], mdYawAngle));
+				mvPoses.push_back(DronePosition(mvvv3WayPoints[i][j], mdYawAngle));
 			} else {
-				qPoses.push(
+				mvPoses.push_back(
 						DronePosition(mvvv3WayPoints[i][miNumOfCols - 1 - j],
 								mdYawAngle));
 			}
-			cout << qPoses.back().pos << endl;
+			cout << mvPoses.back().pos << endl;
 		}
 	}
+	miCurrentPoseNum = -1;
 
-	stayTimeMs = 500;
-	initialReachedDist = 0.2;
-	stayWithinDist = 0.1;
+	reachedDist = 0.2;
 
-//	checkpoint = checkpointP;
-
-	reachedAtClock = -1;
-	reached = false;
-
-	isStarted = false;
 	isCompleted = false;
 
 	char buf[200];
@@ -201,26 +194,12 @@ KIZigZagBoard::~KIZigZagBoard(void) {
 }
 
 bool KIZigZagBoard::update(const tum_ardrone::filter_stateConstPtr statePtr) {
-	if (!isStarted) {
-		checkpoint = qPoses.front();
+	if (miCurrentPoseNum < 0) {
+		miCurrentPoseNum = 0;
+		checkpoint = mvPoses[miCurrentPoseNum];
 		controller->setTarget(checkpoint);
 	}
-	isStarted = true;
 
-	// checkpoint reached?
-	if (!isCompleted && reached /*&& (getMS() - reachedAtClock) > stayTimeMs*/) {
-		printf("checkpoint done!\n");
-		qPoses.pop();
-		if (qPoses.empty()) {
-			printf("zigzag done!\n");
-			isCompleted = true;
-		} else {
-			checkpoint = qPoses.front();
-			controller->setTarget(checkpoint);
-			reached = false;
-			reachedAtClock = getMS();
-		}
-	}
 	if (isCompleted) {
 		node->sendControlToDrone(controller->update(statePtr));
 		return true;
@@ -234,27 +213,31 @@ bool KIZigZagBoard::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 	double diffDistSquared = diffs * diffs;
 
 	// if not reached yet, need to get within small radius to count.
-	if (!reached && diffDistSquared < initialReachedDist * initialReachedDist
-			&& diffYaw * diffYaw < 25) {
-		reached = true;
-		reachedAtClock = getMS();
-		printf("target reached initially!\n");
-
+	if (diffDistSquared < reachedDist * reachedDist && diffYaw * diffYaw < 25){
+		// snap shot
         std_msgs::String s;
         s.data = "Snap ";
-        std::stringstream buf;
-        buf << (6 - qPoses.size());
+		std::stringstream buf;
+		buf << miCurrentPoseNum / miNumOfCols << " "
+				<< ((miCurrentPoseNum / miNumOfCols) % 2 == 0 ?
+						miCurrentPoseNum % miNumOfCols :
+						(miNumOfCols - 1 - (miCurrentPoseNum % miNumOfCols)))
+				<< " " << statePtr->x << " " << statePtr->y << " "
+				<< statePtr->z << " " << statePtr->yaw;
         s.data += buf.str();
         node->interface_directions_pub.publish(s);
-	}
+		cout << "Waypoint " << miCurrentPoseNum << " reached!\t" << buf.str()
+				<< endl;
 
-	// if too far away again: revoke reached status...
-	// if (reached
-	// 		&& (diffDistSquared > stayWithinDist * stayWithinDist
-	// 				|| diffYaw * diffYaw > 25)) {
-	// 	reached = false;
-	// 	printf("target lost again!\n");
-	// }
+        // update to the next pose
+        if (++miCurrentPoseNum >= mvPoses.size()) {
+			cout << "Zigzagboard complete!" << endl;
+			isCompleted = true;
+		} else {
+			checkpoint = mvPoses[miCurrentPoseNum];
+			controller->setTarget(checkpoint);
+		}
+	}
 
 	// control!
 	node->sendControlToDrone(controller->update(statePtr));
