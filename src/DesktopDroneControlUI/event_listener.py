@@ -143,6 +143,7 @@ class EventListener(DroneVideoDisplay):
                 self.circles = []
                 self.small_circles = []
                 self.tum_ardrone_pub.publish(String("p reset"))
+                self.resetQimages()
 
                 self.scale_rcv_count = 0
                 self.toggle = 0
@@ -205,10 +206,10 @@ class EventListener(DroneVideoDisplay):
 
     def mousePressEvent(self, event):
         # All things are done when mouseReleaseEvent is triggered.
-        pass
+        self.points.append(event.pos())
 
     def mouseReleaseEvent(self, event):
-        clear_pane = True
+        print 'len of points', len(self.points)
         if len(self.points) > 20:
             self.parseGesture()
             if self.gesture == self.CIRCLE:
@@ -263,14 +264,26 @@ class EventListener(DroneVideoDisplay):
             else:
                 self.resetQimages()
                 self.centralWidget.setDefaultLayout()
-            self.points = []
         
-        if clear_pane:
+        # I would like to check for len == 1
+        # but on fast clicking, users may drag a bit.
+        elif len(self.points) < 6:
+            point = self.points[0]
+            self.circles.append([point.x(), point.y(), 8,\
+                    [255, 255, 255, 70]])
+
+            if len(self.circles) == 4:
+                self.gesture = self.ZIGZAG
+                self.sendZigZagDirections3()
+                self.circles = []
+
+            
+
             if self.centralWidget.clickedLabel != -1:
                 # If a label has been clicked, this is the place to 
                 # do whatever you want.
                 if self.gesture == self.ZIGZAG:
-                    commands = ['clearCommands']
+                    commands = ['clearCommands', 'setReference 0 0 0 0']
                     commands.append(self.location_history[self.centralWidget.clickedLabel])
                     commands.append('start')
                     for command in commands:
@@ -279,7 +292,12 @@ class EventListener(DroneVideoDisplay):
                     self.publisher.publish(String("Repeat " + \
                         str(self.centralWidget.clickedLabel)))
                 print "label selected", self.centralWidget.clickedLabel
+
                 self.centralWidget.clickedLabel = -1
+                self.circles = []
+
+        # Clear points at the end of mouseReleaseEvent
+        self.points = []
 
     def mouseDoubleClickEvent(self, event):
         print event.x(), event.y()
@@ -401,7 +419,6 @@ class EventListener(DroneVideoDisplay):
                    commands.append(command)
 
         if object_found:
-            commands.append('land')
             commands.append('start')
             for command in commands:
                 self.tum_ardrone_pub.publish(String("c " + command))
