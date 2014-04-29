@@ -10,6 +10,7 @@
 import roslib#; roslib.load_manifest('ardrone_tutorials')
 import rospy
 import os
+from copy import copy
 
 # Import the two types of messages we're interested in
 from sensor_msgs.msg import Image         # for receiving the video feed
@@ -71,8 +72,9 @@ class CentralWidget(QtGui.QWidget):
         self.lbls[5].move(640 + 400, 2*95)
         self.lbls[6].move(640 + 160, 3*95)
         self.lbls[7].move(640 + 400, 3*95)
+        self.lbls[8].move(1000, 1000)
 
-    def setDefaultLayout(self):
+    def setCircleLayout(self):
         self.lbls[0].move(640 + 0*80 + 10, 2.5*55)
         self.lbls[1].move(640 + 1*80 + 10, 1*55)
         self.lbls[2].move(640 + 3*80 + 10, 0*55)
@@ -81,7 +83,18 @@ class CentralWidget(QtGui.QWidget):
         self.lbls[5].move(640 + 5*80 + 10, 4*55)
         self.lbls[6].move(640 + 3*80 + 10, 5*55)
         self.lbls[7].move(640 + 1*80 + 10, 4*55)
+        self.lbls[8].move(1000, 1000)
 
+    def setDefaultLayout(self):
+        self.lbls[0].move(640 + 0*200 + 60, 0*95 + 30)
+        self.lbls[1].move(640 + 1*200 + 60, 0*95 + 30)
+        self.lbls[2].move(640 + 2*200 + 60, 0*95 + 30)
+        self.lbls[3].move(640 + 0*200 + 60, 1*95 + 30)
+        self.lbls[4].move(640 + 1*200 + 60, 1*95 + 30)
+        self.lbls[5].move(640 + 2*200 + 60, 1*95 + 30)
+        self.lbls[6].move(640 + 0*200 + 60, 2*95 + 30)
+        self.lbls[7].move(640 + 1*200 + 60, 2*95 + 30)
+        self.lbls[8].move(640 + 2*200 + 60, 2*95 + 30)
 
     def initSidePane(self):
         """ Initialize the side pane for user interaction.
@@ -90,7 +103,7 @@ class CentralWidget(QtGui.QWidget):
         self.imageBox.setPixmap(pixmap)
 
         self.lbls = []
-        for i in xrange(8):
+        for i in xrange(9):
             lbl = ClickableLabel(i, self)
             lbl.setPixmap(pixmap.scaledToHeight(80))
             self.lbls.append(lbl)
@@ -229,6 +242,7 @@ class DroneVideoDisplay(QtGui.QMainWindow):
             try:            
                     # Convert the ROS image into a QImage which we can display
                     self.qimage = QtGui.QPixmap.fromImage(QtGui.QImage(self.image.data, self.image.width, self.image.height, QtGui.QImage.Format_RGB888))
+                    self.disp_image = copy(self.qimage)
 
                     if len(self.points) > 0:
                         self.DrawPoints()

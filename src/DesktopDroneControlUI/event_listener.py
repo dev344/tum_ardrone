@@ -76,6 +76,10 @@ class EventListener(DroneVideoDisplay):
         self.scale_rcv_count = 0
         self.scale = 1.0
 
+        # Currently, it is a dictionary mapping 
+        # label number to the string command to 
+        # be sent. like location_history[1] = 'goto X Y Z'
+        # TODO: Thing about changing it to a list or not.
         self.location_history = dict()
 
         self.sorted_mappoints = []
@@ -263,6 +267,8 @@ class EventListener(DroneVideoDisplay):
         
         if clear_pane:
             if self.centralWidget.clickedLabel != -1:
+                # If a label has been clicked, this is the place to 
+                # do whatever you want.
                 if self.gesture == self.ZIGZAG:
                     commands = ['clearCommands']
                     commands.append(self.location_history[self.centralWidget.clickedLabel])
@@ -281,6 +287,8 @@ class EventListener(DroneVideoDisplay):
         object_point = self.find_closest_mappoint([event.x(), event.y()], self.sorted_mappoints)
         print "mappoint", object_point
         radius = self.scale * object_point[2]
+
+        self.centralWidget.setCircleLayout()
         self.sendCircleDirections(radius)
         """
         frame = self.bridge.imgmsg_to_cv(self.image, 'bgr8')
@@ -358,6 +366,10 @@ class EventListener(DroneVideoDisplay):
         print "Here, I'll give closest points to the following four points"
         print self.circles
         print len(self.sorted_mappoints)
+
+        # don't think it is needed. But still doing 
+        # it for safety.
+        self.location_history = dict()
 
         # Assuming the usual A,B,C,D cyclic quadrilateral.
         left_boundry = (self.circles[0][0] + self.circles[3][0])/2
@@ -490,9 +502,19 @@ class EventListener(DroneVideoDisplay):
     def callback(self, data):
         print rospy.get_name() + ": I heard %s" % data.data
         ctrl_command = data.data.split()
-        temp = {'ToDraw':True, 'image': self.qimage}
-        self.qimages[int(ctrl_command[1])]['ToDraw'] = True
-        self.qimages[int(ctrl_command[1])]['image'] = self.qimage
+        index = -1
+        if len(ctrl_command) == 7:
+            # It must be "Snap row_num col_num X Y Z Yaw"
+            index = 3*int(ctrl_command[1]) + int(ctrl_command[2])
+            self.location_history[index] = 'goto ' +\
+                    ctrl_command[3] +' '+ ctrl_command[4] +' '+\
+                    ctrl_command[5] +' '+ ctrl_command[6]
+        else:
+            index = int(ctrl_command[1])
+
+        temp = {'ToDraw':True, 'image': self.disp_image}
+        self.qimages[index]['ToDraw'] = True
+        self.qimages[index]['image'] = self.disp_image
 
     def handle_mappoints(self, data):
         split_data = data.data.split('\n')
