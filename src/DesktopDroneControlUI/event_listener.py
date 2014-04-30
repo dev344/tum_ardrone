@@ -267,7 +267,7 @@ class EventListener(DroneVideoDisplay):
         
         # I would like to check for len == 1
         # but on fast clicking, users may drag a bit.
-        elif len(self.points) < 6:
+        elif len(self.points) > 0 and len(self.points) < 6:
             point = self.points[0]
             self.circles.append([point.x(), point.y(), 8,\
                     [255, 255, 255, 70]])
@@ -304,10 +304,13 @@ class EventListener(DroneVideoDisplay):
         print "scale", self.scale
         object_point = self.find_closest_mappoint([event.x(), event.y()], self.sorted_mappoints)
         print "mappoint", object_point
-        radius = self.scale * object_point[2]
+        center = [self.scale * object_point[3], \
+                  self.scale * object_point[2], \
+                  self.scale * object_point[4]]
 
         self.centralWidget.setCircleLayout()
-        self.sendCircleDirections(radius)
+        self.sendCircleDirections(center)
+        self.circles = []
         """
         frame = self.bridge.imgmsg_to_cv(self.image, 'bgr8')
         cv_image = np.array(frame, dtype=np.uint8)        
@@ -368,9 +371,14 @@ class EventListener(DroneVideoDisplay):
     def turn_rightReleased(self):
         controller.SetCommand(0, 0, 0, 0)
 
-    def sendCircleDirections(self, radius):
-        commands = ['clearCommands', 'lockScaleFP', 'setReference $POSE$', 'setLineSpeed 0.3', 'setStayTime 25']
-        commands.append('circleR 0 ' + str(radius) + ' 0')
+    def sendCircleDirections(self, center):
+        commands = ['clearCommands', 'lockScaleFP', 'setReference $POSE$', 'setLineSpeed 2', 'setStayTime 35']
+        command = 'circleRRelDir'
+        for num in center:
+            command += ' ' + str(num)
+
+        print command
+        commands.append(command)
 
 
         # TODO: Make a function out of the following 4 lines.
