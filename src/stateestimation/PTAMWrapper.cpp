@@ -524,7 +524,7 @@ void PTAMWrapper::HandleFrame()
                 // [Devesh]
                 // Hacking to lock scale after we are certain of its
                 // accuracy.
-                if (filter->getScaleAccuracy() > 0.15){
+                if (filter->getScaleAccuracy() < 1){
                     filter->updateScaleXYZ(diffPTAM, diffIMU,
                             PTAMResult.slice<0, 3>());
                 }

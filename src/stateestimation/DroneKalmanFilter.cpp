@@ -685,7 +685,7 @@ void DroneKalmanFilter::updateScaleXYZ(TooN::Vector<3> ptamDiff,
 float DroneKalmanFilter::getScaleAccuracy()
 {
     // [ziquan] proportional to the ratio between observed information and current scale, i.e. -l''(scale) / current scale
-    return 1.0 / std::sqrt(xyz_sum_IMUxIMU) / getCurrentScales()[0];
+	return max(0.5 , min(1.0, exp( - 1.0 / std::sqrt(xyz_sum_IMUxIMU) / getCurrentScales()[0]) / 0.9));
     // return 0.5 + 0.5 * std::min(1.0, std::max(0.0, xyz_sum_PTAMxIMU * xy_scale / 4));// scale-corrected PTAM x IMU
 }
 

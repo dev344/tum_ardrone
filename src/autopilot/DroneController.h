@@ -68,7 +68,7 @@ class DroneController
 private:
     ControlCommand lastSentControl;
 
-    // currentTarget.
+    // currentTarget
     DronePosition target;
     bool targetValid;
 

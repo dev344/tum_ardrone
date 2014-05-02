@@ -149,7 +149,7 @@ void DroneController::calcControl(TooN::Vector<4> new_err,
     TooN::Vector<4> p_term = new_err; // p-term is error.
 
     // rotate error to drone CS, invert pitch
-    double yawRad = yaw * 2 * 3.141592 / 360;
+    double yawRad = yaw * 2 * M_PI / 360;
     d_term[0] = cos(yawRad) * d_error[0] - sin(yawRad) * d_error[1];
     d_term[1] = -sin(yawRad) * d_error[0] - cos(yawRad) * d_error[1];
 
