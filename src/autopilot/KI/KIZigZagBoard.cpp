@@ -12,10 +12,79 @@
 #include "std_msgs/String.h"
 #include <sstream>
 
+double KIZigZagBoard::vectorToYaw(TooN::Vector<3> v) {
+	// base vector = (0,1,0)
+	// yaw angle = arccos ( v<2> . (0,1) / |v<2>| * |(0,1)| )
+	double result = 180.0 / M_PI
+			* acos(v[1] / sqrt(v.slice<0, 2>() * v.slice<0, 2>()));
+
+	// check x value in v to determine sign
+	if (v[0] < 0) {
+		result *= -1;
+	}
+
+	return result;
+}
+
+double KIZigZagBoard::vectorToPitch(TooN::Vector<3> v) {
+	// base vector = (v[0], v[1],0)
+	// pitch angle = arccos ( v . (v[0],v[1],0) / |v| * |(v[0],v[1],0)|
+	double result = 180.0 / M_PI
+			* acos(
+					v.slice<0, 2>() * v.slice<0, 2>()
+							/ (sqrt(v * v)
+									* sqrt(v.slice<0, 2>() * v.slice<0, 2>())));
+	if (v[3] > 0) {
+		result *= -1;
+	}
+	return result;
+}
+
+bool KIZigZagBoard::isWayPointReached(int waypointNum, DronePosition pose) {
+	int rowNum = waypointNumToRowNum(waypointNum);
+	int colNum = waypointNumToColNum(waypointNum);
+	// check yaw diff
+	if (fabs(pose.yaw - mdYawAngle) > 2) {
+		return false;
+	}
+
+	double yawAngleL = vectorToYaw(mvvv3LandMarks[rowNum][colNum] - pose.pos);
+	double yawAngleR = vectorToYaw(
+			mvvv3LandMarks[rowNum][colNum]
+					+ mdColWidth * mvv3LeftToRightUnitVectors[rowNum]
+					- pose.pos);
+	double pitchAngleTop = vectorToPitch(
+			mvvv3LandMarks[rowNum][colNum]
+					+ mdColWidth / 2 * mvv3LeftToRightUnitVectors[rowNum]
+					- pose.pos);
+	double pitchAngleBtm = vectorToPitch(
+			mvvv3LandMarks[rowNum][colNum]
+					+ mdColWidth / 2 * mvv3LeftToRightUnitVectors[rowNum]
+					+ mdRowHeight * TooN::makeVector(0, 0, -1) - pose.pos);
+
+	if (yawAngleL < -mdAngleH / 2 || yawAngleR > mdAngleH / 2) {
+		return false;
+	}
+	if (yawAngleR - yawAngleL < 0.5 * mdAngleH
+			|| yawAngleR - yawAngleL > 0.7 * mdAngleH) {
+		return false;
+	}
+	if (pitchAngleTop < -mdAngleV / 2 || pitchAngleBtm > mdAngleV / 2) {
+		return false;
+	}
+	if (pitchAngleBtm - pitchAngleTop < 0.5 * mdAngleV
+			|| pitchAngleBtm - pitchAngleTop > 0.7 * mdAngleV) {
+		return false;
+	}
+
+	return true;
+}
+
 KIZigZagBoard::KIZigZagBoard(TooN::Vector<3> topLPoint,
 		TooN::Vector<3> topRPoint, TooN::Vector<3> btmLPoint,
 		TooN::Vector<3> btmRPoint, int numOfRows, double angleH,
 		double angleV) {
+
 	mv3TopLPoint = topLPoint;
 	mv3TopRPoint = topRPoint;
 	mv3BtmLPoint = btmLPoint;
@@ -25,7 +94,8 @@ KIZigZagBoard::KIZigZagBoard(TooN::Vector<3> topLPoint,
 	mdAngleH = angleH;
 	mdAngleV = angleV;
 
-	cout << "BOARD CORNERS" << endl << mv3TopLPoint << "\t" << mv3TopRPoint << endl << mv3BtmLPoint << "\t" << mv3BtmRPoint << endl;
+	cout << "BOARD CORNERS" << endl << mv3TopLPoint << "\t" << mv3TopRPoint
+			<< endl << mv3BtmLPoint << "\t" << mv3BtmRPoint << endl;
 	cout << "ROWS\t" << miNumOfRows << endl;
 	cout << "H:V\t" << mdAngleH << ":" << mdAngleV << endl;
 
@@ -40,148 +110,117 @@ KIZigZagBoard::KIZigZagBoard(TooN::Vector<3> topLPoint,
 	TooN::Vector<3> brNormVector = TooN::unit(bEdgeVector ^ rEdgeVector);
 	TooN::Vector<3> trNormVector = TooN::unit(rEdgeVector ^ tEdgeVector);
 
-	mv3OutwardNormVector = TooN::unit((tlNormVector + blNormVector + brNormVector
-			+ trNormVector) / 4.0);
+	mv3OutwardNormVector = TooN::unit(
+			(tlNormVector + blNormVector + brNormVector + trNormVector) / 4.0);
 
-    cout << "OutwardNormVector\t" << mv3OutwardNormVector << endl;
+	cout << "OutwardNormVector\t" << mv3OutwardNormVector << endl;
 
-	// yaw angle direction = arccos ( -ourwardNorm_xy . (0,1) / |-ourwardNorm_xy| * |(0,1)| )
-	mdYawAngle =
-			180.0 / M_PI
-					* acos(
-							-mv3OutwardNormVector[1]
-									/ sqrt(
-											mv3OutwardNormVector.slice<0, 2>()
-													* mv3OutwardNormVector.slice<
-															0, 2>()));
+	mdYawAngle = vectorToYaw(-mv3OutwardNormVector);
+//	// yaw angle direction = arccos ( -ourwardNorm_xy . (0,1) / |-ourwardNorm_xy| * |(0,1)| )
+//	mdYawAngle =
+//			180.0 / M_PI
+//					* acos(
+//							-mv3OutwardNormVector[1]
+//									/ sqrt(
+//											mv3OutwardNormVector.slice<0, 2>()
+//													* mv3OutwardNormVector.slice<
+//															0, 2>()));
+//
+//    // check x value in diff to determine sign
+//    if (mv3OutwardNormVector[0] > 0) {
+//        mdYawAngle *= -1;
+//    }
 
-    // check x value in diff to determine sign
-    if (mv3OutwardNormVector[0] > 0) {
-        mdYawAngle *= -1;
-    }
+	cout << "yaw\t" << mdYawAngle << endl;
 
-    cout << "yaw\t" << mdYawAngle << endl;
-
-    // leftBoundary and rightBoundary
-	vector<TooN::Vector<3> > leftBoundary, rightBoundary;
+	// leftBoundary and rightBoundary
+	vector<TooN::Vector<3> > leftBoundary, rightBoundary,
+			mvv3LeftToRightUnitVectors;
 	TooN::Vector<3> leftLevelHeightVector = (mv3BtmLPoint - mv3TopLPoint)
 			/ miNumOfRows;
 	TooN::Vector<3> rightLevelHeightVector = (mv3BtmRPoint - mv3TopRPoint)
 			/ miNumOfRows;
 
 	leftBoundary.push_back(mv3TopLPoint);
-    cout << "LeftBoundary\t" << leftBoundary.back() << "\t";
 	for (int i = 0; i < miNumOfRows - 1; i++) {
 		leftBoundary.push_back(leftBoundary.back() + leftLevelHeightVector);
-        cout << leftBoundary.back() << "\t";
 	}
-    cout << endl;
 
 	rightBoundary.push_back(mv3TopRPoint);
-    cout << "RightBoundary\t" << rightBoundary.back() << "\t";
 	for (int i = 0; i < miNumOfRows - 1; i++) {
 		rightBoundary.push_back(rightBoundary.back() + rightLevelHeightVector);
-        cout << rightBoundary.back() << "\t";
 	}
-    cout << endl;
 
-	// leftmost and rightmost way points distance to the board plane
+	for (int i = 0; i < miNumOfRows; i++) {
+		mvv3LeftToRightUnitVectors.push_back(
+				TooN::unit(rightBoundary[i] - leftBoundary[i]));
+		cout << "ROW " << i << ": Left " << leftBoundary[i] << "\tRight "
+				<< rightBoundary[i] << "\tUnit "
+				<< mvv3LeftToRightUnitVectors[i] << endl;
+	}
+
+	// row height and col width for each camera view
+	mdRowHeight = max(-leftLevelHeightVector[3], -rightLevelHeightVector[3]);
+	mdColWidth = mdRowHeight * mdAngleH / mdAngleV;
+
+	cout << "RowHeight:ColWidth\t" << mdRowHeight << ":" << mdColWidth << endl;
+
+	// number of cols
+	miNumOfCols = (int) ceil(
+			max(sqrt(tEdgeVector * tEdgeVector),
+					sqrt(bEdgeVector * bEdgeVector)) / mdColWidth);
+	cout << "Num of rows:cols\t" << miNumOfRows << ":" << miNumOfCols << endl;
+
+	// distance to board
 	double cotHalfAngleV = cos(mdAngleV / 2 * M_PI / 180)
 			/ sin(mdAngleV / 2 * M_PI / 180);
-
-	double leftLevelHeight = sqrt(
-			leftLevelHeightVector * leftLevelHeightVector);
-	double rightLevelHeight = sqrt(
-			rightLevelHeightVector * rightLevelHeightVector);
-
-	double leftDistanceToBoard = max(
-			3.0 / 4.0 * leftLevelHeight * cotHalfAngleV, 1.0);
-	double rightDistanceToBoard = max(
-			3.0 / 4.0 * rightLevelHeight * cotHalfAngleV, 1.0);
-
-    cout << "leftDistanceToBoard:rightDistanceToBoard\t" << leftDistanceToBoard << ":" << rightDistanceToBoard << endl;
-
-	// leftmost and rightmost way points distance to the left/right boundary
-	double tanHalfAngleH = sin(mdAngleH / 2 * M_PI / 180)
-			/ cos(mdAngleH / 2 * M_PI / 180);
-
-	double leftDistanceToLeftBoundary = 2.0 / 3.0 * leftDistanceToBoard
-			* tanHalfAngleH;
-	double rightDistanceToRightBoundary = 2.0 / 3.0 * rightDistanceToBoard
-			* tanHalfAngleH;
-
-    cout << "leftDistanceToLeftBoundary:rightDistanceToRightBoundary\t" << leftDistanceToLeftBoundary << ":" << rightDistanceToRightBoundary << endl;
+	mdDistToBoard = cotHalfAngleV * mdRowHeight / 2 / 0.6;
+	cout << "Distance to board\t" << mdDistToBoard << endl;
 
 	// leftmost and rightmost way points
-	vector<TooN::Vector<3> > leftMostWayPoints, rightMostWayPoints,
-			leftToRightUnitVectors;
+	vector<TooN::Vector<3> > leftMostWayPoints, rightMostWayPoints;
 	for (int i = 0; i < miNumOfRows; i++) {
-		leftToRightUnitVectors.push_back(
-				TooN::unit(rightBoundary[i] - leftBoundary[i]));
 		leftMostWayPoints.push_back(
-				leftBoundary[i] + leftLevelHeightVector / 2
-						+ leftDistanceToLeftBoundary
-								* leftToRightUnitVectors.back()
-						+ leftDistanceToBoard * mv3OutwardNormVector);
+				leftBoundary[i] + mdRowHeight / 2 * TooN::makeVector(0, 0, -1)
+						+ mdColWidth / 2 * mvv3LeftToRightUnitVectors[i]
+						+ mdDistToBoard * mv3OutwardNormVector);
 		rightMostWayPoints.push_back(
-				rightBoundary[i] + rightLevelHeightVector / 2
-						- rightDistanceToRightBoundary
-								* leftToRightUnitVectors.back()
-						+ rightDistanceToBoard * mv3OutwardNormVector);
-        cout << "level[" << i << "] leftToRightUnitVectors\t" << leftToRightUnitVectors[i] << "\tleftMostWayPoints\t" << leftMostWayPoints[i] << "\trightMostWayPoints\t" << rightMostWayPoints[i] << endl;
+				rightBoundary[i] + mdRowHeight / 2 * TooN::makeVector(0, 0, -1)
+						- mdColWidth / 2 * mvv3LeftToRightUnitVectors[i]
+						+ mdDistToBoard * mv3OutwardNormVector);
 	}
 
-	// approx # of way point
-	// double leftToRightLength = sqrt(tEdgeVector * tEdgeVector);
-	// miNumOfCols = (int) ceil(
-	// 		leftToRightLength / (leftDistanceToLeftBoundary * 2));
-
-	// // ratio
-	// double ratio = pow(
-	// 		rightDistanceToRightBoundary / leftDistanceToLeftBoundary,
-	// 		1.0 / (miNumOfCols - 1));
-
-    // cout << "RATIO\t" << ratio << endl;
-
-	// // set way points
-	// mvvv3WayPoints.resize(miNumOfRows);
-	// for (int i = 0; i < miNumOfRows; i++) {
-	// 	mvvv3WayPoints[i].resize(miNumOfCols);
-	// 	// leftmost and rightmost
-	// 	mvvv3WayPoints[i][0] = leftMostWayPoints[i];
-	// 	mvvv3WayPoints[i][miNumOfCols - 1] = rightMostWayPoints[i];
-	// 	// the rest
-	// 	for (int j = 1; j < miNumOfCols - 1; j++) {
-	// 		mvvv3WayPoints[i][j] = mvvv3WayPoints[i][j-1]
-	// 				+ leftToRightUnitVectors[i] * leftDistanceToLeftBoundary
-	// 						* (ratio + 1) * pow(ratio, j - 1);
-	// 	}
-	// }
-
-    miNumOfCols = 3;
-    mvvv3WayPoints.resize(miNumOfRows);
-    for (int i = 0; i < miNumOfRows; i++) {
-        mvvv3WayPoints[i].push_back(leftMostWayPoints[i]);
-        mvvv3WayPoints[i].push_back((leftMostWayPoints[i] + rightMostWayPoints[i]) / 2);
-        mvvv3WayPoints[i].push_back(rightMostWayPoints[i]);
-    }
-    
-    cout << "Waypoints: \t" << endl;
-	for (int i = 0; i < miNumOfRows; i++) {
-		for (int j = 0; j < miNumOfCols; j++) {
-			if (i % 2 == 0) {
-				mvPoses.push_back(DronePosition(mvvv3WayPoints[i][j], mdYawAngle));
-			} else {
-				mvPoses.push_back(
-						DronePosition(mvvv3WayPoints[i][miNumOfCols - 1 - j],
-								mdYawAngle));
+	// construct landmarks and waypoints
+	mvvv3LandMarks.resize(miNumOfRows);
+	mvvv3WayPoints.resize(miNumOfRows);
+	if (miNumOfCols == 1) {
+		for (int i = 0; i < miNumOfRows; i++) {
+			mvvv3LandMarks[i].push_back(leftBoundary[i]);
+			mvvv3WayPoints[i].push_back(leftMostWayPoints[i]);
+		}
+	} else {
+		for (int i = 0; i < miNumOfRows; i++) {
+			TooN::Vector<3> v3StepSize = (rightMostWayPoints[i]
+					- leftMostWayPoints[i]) / (miNumOfCols - 1);
+			mvvv3LandMarks[i].push_back(leftBoundary[i]);
+			mvvv3WayPoints[i].push_back(leftMostWayPoints[i]);
+			for (int j = 1; j < miNumOfCols; j++) {
+				mvvv3LandMarks[i].push_back(leftBoundary[i] + v3StepSize * j);
+				mvvv3WayPoints[i].push_back(
+						leftMostWayPoints[i] + v3StepSize * j);
 			}
-			cout << mvPoses.back().pos << endl;
 		}
 	}
-	miCurrentPoseNum = -1;
 
-	reachedDist = 0.2;
+	cout << "LandMarks\t&\tWaypoints" << endl;
+	for (int i = 0; i < miNumOfRows; i++) {
+		for (int j = 0; j < miNumOfCols; j++) {
+			cout << mvvv3LandMarks[i][j] << "\t" << mvvv3WayPoints[i][j]
+					<< endl;
+		}
+	}
+
+	miCurrentWayPointNum = -1;
 
 	isCompleted = false;
 
@@ -194,9 +233,9 @@ KIZigZagBoard::~KIZigZagBoard(void) {
 }
 
 bool KIZigZagBoard::update(const tum_ardrone::filter_stateConstPtr statePtr) {
-	if (miCurrentPoseNum < 0) {
-		miCurrentPoseNum = 0;
-		checkpoint = mvPoses[miCurrentPoseNum];
+	if (miCurrentWayPointNum < 0) {
+		miCurrentWayPointNum = 0;
+		checkpoint = DronePosition(mvvv3WayPoints[0][0], mdYawAngle);
 		controller->setTarget(checkpoint);
 	}
 
@@ -206,35 +245,33 @@ bool KIZigZagBoard::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 	}
 
 	// get target dist:
-	TooN::Vector<3> diffs = TooN::makeVector(statePtr->x - checkpoint.pos[0],
-			statePtr->y - checkpoint.pos[1], statePtr->z - checkpoint.pos[2]);
-
-	double diffYaw = statePtr->yaw - checkpoint.yaw;
-	double diffDistSquared = diffs * diffs;
+	DronePosition currentPose = DronePosition(
+			TooN::makeVector(statePtr->x, statePtr->y, statePtr->z),
+			statePtr->yaw);
 
 	// if not reached yet, need to get within small radius to count.
-	if (diffDistSquared < reachedDist * reachedDist && diffYaw * diffYaw < 25){
+	if (isWayPointReached(miCurrentWayPointNum, currentPose)) {
 		// snap shot
-        std_msgs::String s;
-        s.data = "Snap ";
+		std_msgs::String s;
+		s.data = "Snap ";
 		std::stringstream buf;
-		buf << miCurrentPoseNum / miNumOfCols << " "
-				<< ((miCurrentPoseNum / miNumOfCols) % 2 == 0 ?
-						miCurrentPoseNum % miNumOfCols :
-						(miNumOfCols - 1 - (miCurrentPoseNum % miNumOfCols)))
-				<< " " << statePtr->x << " " << statePtr->y << " "
-				<< statePtr->z << " " << statePtr->yaw;
-        s.data += buf.str();
-        node->interface_directions_pub.publish(s);
-		cout << "Waypoint " << miCurrentPoseNum << " reached!\t" << buf.str()
+		int rowNum = waypointNumToRowNum(miCurrentWayPointNum);
+		int colNum = waypointNumToColNum(miCurrentWayPointNum);
+		buf << rowNum << " " << colNum << " " << statePtr->x << " "
+				<< statePtr->y << " " << statePtr->z << " " << statePtr->yaw;
+		s.data += buf.str();
+		node->interface_directions_pub.publish(s);
+		cout << "Waypoint " << miCurrentWayPointNum << " reached!\t" << buf.str()
 				<< endl;
 
-        // update to the next pose
-        if (++miCurrentPoseNum >= mvPoses.size()) {
+		// update to the next pose
+		if (++miCurrentWayPointNum >= miNumOfRows * miNumOfCols) {
 			cout << "Zigzagboard complete!" << endl;
 			isCompleted = true;
 		} else {
-			checkpoint = mvPoses[miCurrentPoseNum];
+			int rowNum = waypointNumToRowNum(miCurrentWayPointNum);
+			int colNum = waypointNumToColNum(miCurrentWayPointNum);
+			checkpoint = DronePosition(mvvv3WayPoints[rowNum][colNum], mdYawAngle);
 			controller->setTarget(checkpoint);
 		}
 	}
