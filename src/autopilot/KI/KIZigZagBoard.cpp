@@ -34,7 +34,7 @@ double KIZigZagBoard::vectorToPitch(TooN::Vector<3> v) {
 					v.slice<0, 2>() * v.slice<0, 2>()
 							/ (sqrt(v * v)
 									* sqrt(v.slice<0, 2>() * v.slice<0, 2>())));
-	if (v[3] > 0) {
+	if (v[2] > 0) {
 		result *= -1;
 	}
 	return result;
@@ -160,7 +160,7 @@ KIZigZagBoard::KIZigZagBoard(TooN::Vector<3> topLPoint,
 	}
 
 	// row height and col width for each camera view
-	mdRowHeight = max(-leftLevelHeightVector[3], -rightLevelHeightVector[3]);
+	mdRowHeight = max(-leftLevelHeightVector[2], -rightLevelHeightVector[2]);
 	mdColWidth = mdRowHeight * mdAngleH / mdAngleV;
 
 	cout << "RowHeight:ColWidth\t" << mdRowHeight << ":" << mdColWidth << endl;
