@@ -252,6 +252,7 @@ KIZigZagBoard::~KIZigZagBoard(void) {
 bool KIZigZagBoard::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 	if (miCurrentWayPointNum < 0) {
 		miCurrentWayPointNum = 0;
+		miTimer = getMS();
 		checkpoint = DronePosition(mvvv3WayPoints[0][0], mvdYawAngles[0]);
 		controller->setTarget(checkpoint);
 	}
@@ -277,8 +278,9 @@ bool KIZigZagBoard::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 				<< statePtr->y << " " << statePtr->z << " " << statePtr->yaw;
 		s.data += buf.str();
 		node->interface_directions_pub.publish(s);
-		cout << "Waypoint " << miCurrentWayPointNum << " reached!\t" << buf.str()
+		cout << "Waypoint " << miCurrentWayPointNum << " reached after " << (getMS() - miTimer) / 1000 << "s" << buf.str()
 				<< endl;
+		miTimer = getMS();
 
 		// update to the next pose
 		if (++miCurrentWayPointNum >= miNumOfRows * miNumOfCols) {

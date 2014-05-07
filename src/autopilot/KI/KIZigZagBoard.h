@@ -39,6 +39,8 @@ private:
 
 	DronePosition checkpoint;
 
+	int miTimer;
+
 	// (0,1,z) -> yaw = 0
 	// clockwise -> yaw > 0
 	// otherwise -> yaw < 0
