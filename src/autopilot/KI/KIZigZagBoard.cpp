@@ -278,7 +278,7 @@ bool KIZigZagBoard::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 				<< statePtr->y << " " << statePtr->z << " " << statePtr->yaw;
 		s.data += buf.str();
 		node->interface_directions_pub.publish(s);
-		cout << "Waypoint " << miCurrentWayPointNum << " reached after " << (getMS() - miTimer) / 1000 << "s" << buf.str()
+		cout << "Waypoint " << miCurrentWayPointNum << " reached after " << (getMS() - miTimer) / 1000 << "s\t" << buf.str()
 				<< endl;
 		miTimer = getMS();
 
