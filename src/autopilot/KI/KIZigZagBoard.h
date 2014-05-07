@@ -3,6 +3,7 @@
 #define __KIZIGZAGBOARD_H
 
 #include "KIProcedure.h"
+#include "KIFlyAlong.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -37,7 +38,7 @@ private:
 	//double reachedDist;
 	//double stayWithinDist;
 
-	DronePosition checkpoint;
+	//DronePosition checkpoint;
 
 	int miTimer;
 
@@ -64,6 +65,7 @@ private:
 	}
 
 	bool isWayPointReached(int waypointNum, DronePosition pose);
+	KIFlyAlong* mpKIHelper;
 
 public:
 	KIZigZagBoard(TooN::Vector<3> topLPoint, TooN::Vector<3> topRPoint,

@@ -102,7 +102,7 @@ public:
     TooN::Vector<28> logInfo;
 
     // adds a waypoint
-    void setTarget(DronePosition newTarget);
+    void setTarget(DronePosition newTarget, bool isVirtual = false);
     void clearTarget();
     DronePosition getCurrentTarget();
     ControlCommand getLastControl();

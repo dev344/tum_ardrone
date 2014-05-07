@@ -3,57 +3,72 @@
 #include "../ControlNode.h"
 #include "../../HelperFunctions.h"
 
+KIFlyAlong::KIFlyAlong(DronePosition startPose, DronePosition endPose,
+		double linearSpeed) {
+	mposeStart = startPose;
+	while (mposeStart.yaw < 0) {
+		mposeStart.yaw += 360;
+	}
+	mposeEnd = endPose;
+	while (mposeEnd.yaw < 0) {
+		mposeEnd.yaw += 360;
+	}
+	mdLinearSpeed = linearSpeed;
 
-KIFlyAlong::KIFlyAlong(DronePosition startPositionP,
-		TooN::Vector<3> directionP,
-		double lineSpeedP,
-		double distanceP
-		)
-{
-	startPosition = startPositionP;
-	checkpoint = startPositionP.pos;
-	direction = TooN::unit(directionP);
-	lineSpeed = lineSpeedP;
-	distance = distanceP;
-	directionSet = false;
+	mv3DirectionUnitVector = TooN::unit(mposeEnd.pos - mposeStart.pos);
+	mdDistance = sqrt(
+			(mposeEnd.pos - mposeStart.pos) * (mposeEnd.pos - mposeStart.pos));
+
 	isCompleted = false;
 
 	char buf[200];
-	snprintf(buf,200,"goAlong %.2f %.2f %.2f, v=%.2f, distance=%.2fm", directionP[0], directionP[1], directionP[2], lineSpeedP, distanceP);
+	snprintf(buf, 200,
+			"goAlong from %.2f %.2f %.2f (%.2f) to %.2f %.2f %.2f (%.2f), speed=%.2f",
+			mposeStart.pos[0], mposeStart.pos[1], mposeStart.pos[2],
+			mposeStart.yaw, mposeEnd.pos[0], mposeEnd.pos[1], mposeEnd.pos[2],
+			mposeEnd.yaw, mdLinearSpeed);
 	command = buf;
 }
 
-
-KIFlyAlong::~KIFlyAlong(void)
-{
+KIFlyAlong::~KIFlyAlong(void) {
 }
 
-
-bool KIFlyAlong::update(const tum_ardrone::filter_stateConstPtr statePtr)
-{
-	if(isCompleted)
-	{
+bool KIFlyAlong::update(const tum_ardrone::filter_stateConstPtr statePtr) {
+	if (isCompleted) {
 		node->sendControlToDrone(controller->update(statePtr));
 		return true;
 	}
 
-	// get current position
-	TooN::Vector<3> currentpoint = TooN::makeVector(statePtr->x, statePtr->y, statePtr->z);
-	
-	// distance reached?
-	TooN::Vector<3> diffs = currentpoint - startPosition.pos;
-	if ((diffs * direction) / (direction * direction) >= distance)
-	{
-		//controller->clearDirection();
-		printf("line done!\n");
-		isCompleted = true;
-		return false;
+	// http://www.lighthouse3d.com/tutorials/maths/vector-projection/
+	TooN::Vector<3> u = TooN::makeVector(statePtr->x, statePtr->y, statePtr->z)
+			- mposeStart.pos;
+	TooN::Vector<3> v = mv3DirectionUnitVector;
+	TooN::Vector<3> puv = (v * u) * v;	// project u onto v
+
+	// special case around start pose
+	if (v * u <= 0) {
+		controller->setTarget(
+				DronePosition(
+						mposeStart.pos + puv
+								+ mdLinearSpeed * mv3DirectionUnitVector,
+						mposeStart.yaw), true);
 	}
 
-	// set target
-	diffs = currentpoint - checkpoint;
-	checkpoint += direction * ((diffs * direction) / (direction * direction));	// checkpoint update	
-	controller->setTarget(DronePosition(checkpoint + lineSpeed * direction, startPosition.yaw));
+	// special case around end pose
+	if ((v * u) + mdLinearSpeed >= mdDistance) {
+		controller->setTarget(mposeEnd);
+		cout << "flyAlong done!" << endl;
+		isCompleted = true;
+	}
+
+	// normal case
+	controller->setTarget(
+			DronePosition(
+					mposeStart.pos + puv
+							+ mdLinearSpeed * mv3DirectionUnitVector,
+					mposeStart.yaw
+							+ ((v * u) + mdLinearSpeed) / mdDistance
+									* (mposeEnd.yaw - mposeStart.yaw)), true);
 
 	// control!
 	node->sendControlToDrone(controller->update(statePtr));

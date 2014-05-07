@@ -43,9 +43,10 @@ double KIZigZagBoard::vectorToPitch(TooN::Vector<3> v) {
 bool KIZigZagBoard::isWayPointReached(int waypointNum, DronePosition pose) {
 	int rowNum = waypointNumToRowNum(waypointNum);
 	int colNum = waypointNumToColNum(waypointNum);
-	
-	double yawAngleL = vectorToYaw(mvvv3LandMarks[rowNum][colNum] - pose.pos) - pose.yaw;
-	
+
+	double yawAngleL = vectorToYaw(mvvv3LandMarks[rowNum][colNum] - pose.pos)
+			- pose.yaw;
+
 	double yawAngleR = vectorToYaw(
 			mvvv3LandMarks[rowNum][colNum]
 					+ mdColWidth * mvv3LeftToRightUnitVectors[rowNum]
@@ -67,26 +68,33 @@ bool KIZigZagBoard::isWayPointReached(int waypointNum, DronePosition pose) {
 		return false;
 	}
 	if (yawAngleR > mdAngleH / 2 || yawAngleR < mdAngleH / 4) {
-	    return false;
+		return false;
 	}
 	if (yawAngleR - yawAngleL < 0.5 * mdAngleH
 			|| yawAngleR - yawAngleL > 0.7 * mdAngleH) {
 //		return false;
 	}
-	if (pitchAngleTop < -mdAngleV / 2 || pitchAngleTop > -mdAngleV / 4){
+	if (pitchAngleTop < -mdAngleV / 2 || pitchAngleTop > -mdAngleV / 4) {
 		return false;
 	}
 	if (pitchAngleBtm > mdAngleV / 2 || pitchAngleBtm < mdAngleV / 4) {
-	    return false;
+		return false;
 	}
 	if (pitchAngleBtm - pitchAngleTop < 0.5 * mdAngleV
 			|| pitchAngleBtm - pitchAngleTop > 0.7 * mdAngleV) {
 //		return false;
 	}
 
-    cout << "YawDiff: " << fabs(pose.yaw - mvdYawAngles[rowNum])  << "\tDistDiff:" << sqrt((mvvv3WayPoints[rowNum][colNum] - pose.pos) * (mvvv3WayPoints[rowNum][colNum] - pose.pos)) << endl;
-    cout << "L: " << yawAngleL << "\tR: " << yawAngleR << "\tR-L: " << (yawAngleR - yawAngleL) << endl;
-    cout << "T: " << pitchAngleTop << "\tB: " << pitchAngleBtm << "\tB-T: " << (pitchAngleBtm - pitchAngleTop) << endl;
+	cout << "YawDiff: " << fabs(pose.yaw - mvdYawAngles[rowNum])
+			<< "\tDistDiff:"
+			<< sqrt(
+					(mvvv3WayPoints[rowNum][colNum] - pose.pos)
+							* (mvvv3WayPoints[rowNum][colNum] - pose.pos))
+			<< endl;
+	cout << "L: " << yawAngleL << "\tR: " << yawAngleR << "\tR-L: "
+			<< (yawAngleR - yawAngleL) << endl;
+	cout << "T: " << pitchAngleTop << "\tB: " << pitchAngleBtm << "\tB-T: "
+			<< (pitchAngleBtm - pitchAngleTop) << endl;
 	return true;
 }
 
@@ -240,6 +248,7 @@ KIZigZagBoard::KIZigZagBoard(TooN::Vector<3> topLPoint,
 	miCurrentWayPointNum = -1;
 
 	isCompleted = false;
+	mpKIHelper = NULL;
 
 	char buf[200];
 	snprintf(buf, 200, "zigzagboard");
@@ -250,16 +259,16 @@ KIZigZagBoard::~KIZigZagBoard(void) {
 }
 
 bool KIZigZagBoard::update(const tum_ardrone::filter_stateConstPtr statePtr) {
-	if (miCurrentWayPointNum < 0) {
-		miCurrentWayPointNum = 0;
-		miTimer = getMS();
-		checkpoint = DronePosition(mvvv3WayPoints[0][0], mvdYawAngles[0]);
-		controller->setTarget(checkpoint);
-	}
-
 	if (isCompleted) {
 		node->sendControlToDrone(controller->update(statePtr));
 		return true;
+	}
+
+	if (miCurrentWayPointNum < 0) {
+		miCurrentWayPointNum = 0;
+		miTimer = getMS();
+		controller->setTarget(
+				DronePosition(mvvv3WayPoints[0][0], mvdYawAngles[0]));
 	}
 
 	DronePosition currentPose = DronePosition(
@@ -278,20 +287,37 @@ bool KIZigZagBoard::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 				<< statePtr->y << " " << statePtr->z << " " << statePtr->yaw;
 		s.data += buf.str();
 		node->interface_directions_pub.publish(s);
-		cout << "Waypoint " << miCurrentWayPointNum << " reached after " << (getMS() - miTimer) / 1000 << "s\t" << buf.str()
-				<< endl;
+		cout << "Waypoint " << miCurrentWayPointNum << " reached after "
+				<< (getMS() - miTimer) / 1000 << "s\t" << buf.str() << endl;
 		miTimer = getMS();
 
 		// update to the next pose
-		if (++miCurrentWayPointNum >= miNumOfRows * miNumOfCols) {
+		miCurrentWayPointNum++;
+		if (miCurrentWayPointNum >= miNumOfRows * miNumOfCols) {
 			cout << "Zigzagboard complete!" << endl;
 			isCompleted = true;
 		} else {
-			int rowNum = waypointNumToRowNum(miCurrentWayPointNum);
-			int colNum = waypointNumToColNum(miCurrentWayPointNum);
-			checkpoint = DronePosition(mvvv3WayPoints[rowNum][colNum], mvdYawAngles[rowNum]);
-			controller->setTarget(checkpoint);
+			int oldRowNum = waypointNumToRowNum(miCurrentWayPointNum - 1);
+			int oldColNum = waypointNumToRowNum(miCurrentWayPointNum - 1);
+
+			int newRowNum = waypointNumToRowNum(miCurrentWayPointNum);
+			int newColNum = waypointNumToColNum(miCurrentWayPointNum);
+
+			mpKIHelper = new KIFlyAlong(
+					DronePosition(mvvv3WayPoints[oldRowNum][oldColNum],
+							mvdYawAngles[oldRowNum]),
+					DronePosition(mvvv3WayPoints[newRowNum][newColNum],
+							mvdYawAngles[newRowNum]), 0.5);
+			mpKIHelper->setPointers(this->node, this->controller);
+
+			cout << "Distance to next waypoint is "
+					<< mpKIHelper->getDistance()
+					<< endl;
 		}
+	}
+
+	if (mpKIHelper != NULL) {
+		mpKIHelper->update(statePtr);
 	}
 
 	// control!

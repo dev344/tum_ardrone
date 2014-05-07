@@ -46,8 +46,8 @@
 #include "KI/KIProcedure.h"
 
 // [Devesh]
-#include <cmath>
-#define PI 3.14159265
+//#include <cmath>
+//#define PI 3.14159265
 #include "KI/KIFlyToRelDir.h"
 
 using namespace std;
@@ -510,16 +510,16 @@ void ControlNode::popNextCommand(
                             // statePtr->yaw is clockwise. So, I take negative of it.
                             TooN::makeVector(
                                     parameters[0]
-                                            * cos(-statePtr->yaw * PI / 180)
+                                            * cos(-statePtr->yaw * M_PI / 180)
                                             - parameters[1]
                                                     * sin(
-                                                            -statePtr->yaw * PI
+                                                            -statePtr->yaw * M_PI
                                                                     / 180),
                                     parameters[0]
-                                            * sin(-statePtr->yaw * PI / 180)
+                                            * sin(-statePtr->yaw * M_PI / 180)
                                             + parameters[1]
                                                     * cos(
-                                                            -statePtr->yaw * PI
+                                                            -statePtr->yaw * M_PI
                                                                     / 180),
                                     parameters[2])
                                     + parameter_referenceZero.pos,
@@ -535,34 +535,34 @@ void ControlNode::popNextCommand(
         }
 
         // [Devesh]
-        else if (sscanf(command.c_str(), "goAlongRelDir %f %f %f %f",
-                &parameters[0], &parameters[1], &parameters[2], &parameters[3])
-                == 4)
-        {
-            currentKI = new KIFlyAlong(
-            // current position
-                    DronePosition(
-                            TooN::makeVector(statePtr->x, statePtr->y,
-                                    statePtr->z), statePtr->yaw),
-                    // direction
-                    TooN::makeVector(
-                            parameters[0] * cos(-statePtr->yaw * PI / 180)
-                                    - parameters[1]
-                                            * sin(-statePtr->yaw * PI / 180),
-                            parameters[0] * sin(-statePtr->yaw * PI / 180)
-                                    + parameters[1]
-                                            * cos(-statePtr->yaw * PI / 180),
-                            parameters[2]),
-                    // line speed
-                    parameter_LineSpeed,
-                    // distance
-                    sqrt(
-                            parameters[0] * parameters[0]
-                                    + parameters[1] * parameters[1]
-                                    + parameters[2] * parameters[2]));
-            currentKI->setPointers(this, &controller);
-            commandUnderstood = true;
-        }
+//        else if (sscanf(command.c_str(), "goAlongRelDir %f %f %f %f",
+//                &parameters[0], &parameters[1], &parameters[2], &parameters[3])
+//                == 4)
+//        {
+//            currentKI = new KIFlyAlong(
+//            // current position
+//                    DronePosition(
+//                            TooN::makeVector(statePtr->x, statePtr->y,
+//                                    statePtr->z), statePtr->yaw),
+//                    // direction
+//                    TooN::makeVector(
+//                            parameters[0] * cos(-statePtr->yaw * PI / 180)
+//                                    - parameters[1]
+//                                            * sin(-statePtr->yaw * PI / 180),
+//                            parameters[0] * sin(-statePtr->yaw * PI / 180)
+//                                    + parameters[1]
+//                                            * cos(-statePtr->yaw * PI / 180),
+//                            parameters[2]),
+//                    // line speed
+//                    parameter_LineSpeed,
+//                    // distance
+//                    sqrt(
+//                            parameters[0] * parameters[0]
+//                                    + parameters[1] * parameters[1]
+//                                    + parameters[2] * parameters[2]));
+//            currentKI->setPointers(this, &controller);
+//            commandUnderstood = true;
+//        }
 
         // moveBy
         else if (sscanf(command.c_str(), "moveBy %f %f %f %f", &parameters[0],
@@ -625,25 +625,25 @@ void ControlNode::popNextCommand(
         }
 
         // goAlong [ziquan]
-        else if (sscanf(command.c_str(), "goAlong %f %f %f %f", &parameters[0],
-                &parameters[1], &parameters[2], &parameters[3]) == 4)
-        {
-            currentKI = new KIFlyAlong(
-            // current position
-                    DronePosition(
-                            TooN::makeVector(statePtr->x, statePtr->y,
-                                    statePtr->z), statePtr->yaw),
-                    // direction
-                    TooN::makeVector(parameters[0], parameters[1],
-                            parameters[2]),
-                    // line speed
-                    parameter_LineSpeed,
-                    // distance
-                    parameters[3]);
-            currentKI->setPointers(this, &controller);
-            commandUnderstood = true;
-            currentKIString = command;
-        }
+//        else if (sscanf(command.c_str(), "goAlong %f %f %f %f", &parameters[0],
+//                &parameters[1], &parameters[2], &parameters[3]) == 4)
+//        {
+//            currentKI = new KIFlyAlong(
+//            // current position
+//                    DronePosition(
+//                            TooN::makeVector(statePtr->x, statePtr->y,
+//                                    statePtr->z), statePtr->yaw),
+//                    // direction
+//                    TooN::makeVector(parameters[0], parameters[1],
+//                            parameters[2]),
+//                    // line speed
+//                    parameter_LineSpeed,
+//                    // distance
+//                    parameters[3]);
+//            currentKI->setPointers(this, &controller);
+//            commandUnderstood = true;
+//            currentKIString = command;
+//        }
 
         // spin [ziquan]
         else if (sscanf(command.c_str(), "spin %f", &parameters[0]) == 1)
@@ -736,16 +736,16 @@ void ControlNode::popNextCommand(
                             // statePtr->yaw is clockwise. So, I take negative of it.
             TooN::Vector<3> centerPoint = TooN::makeVector(
                         parameters[0]
-                                * cos(-statePtr->yaw * PI / 180)
+                                * cos(-statePtr->yaw * M_PI / 180)
                                 - parameters[1]
                                         * sin(
-                                                -statePtr->yaw * PI
+                                                -statePtr->yaw * M_PI
                                                         / 180),
                         parameters[0]
-                                * sin(-statePtr->yaw * PI / 180)
+                                * sin(-statePtr->yaw * M_PI / 180)
                                 + parameters[1]
                                         * cos(
-                                                -statePtr->yaw * PI
+                                                -statePtr->yaw * M_PI
                                                         / 180),
                         parameters[2]) + parameter_referenceZero.pos;
 
@@ -880,33 +880,33 @@ void ControlNode::popNextCommand(
             // statePtr->yaw is clockwise. So, I take negative of it.
             currentKI = new KIZigZagBoard(
                     TooN::makeVector(
-                            parameters[0] * cos(-statePtr->yaw * PI / 180) - 
-                                parameters[1] * sin(-statePtr->yaw * PI / 180),
-                            parameters[0] * sin(-statePtr->yaw * PI / 180) + 
-                                parameters[1] * cos(-statePtr->yaw * PI / 180),
+                            parameters[0] * cos(-statePtr->yaw * M_PI / 180) -
+                                parameters[1] * sin(-statePtr->yaw * M_PI / 180),
+                            parameters[0] * sin(-statePtr->yaw * M_PI / 180) +
+                                parameters[1] * cos(-statePtr->yaw * M_PI / 180),
                             parameters[2]) +
                         parameter_referenceZero.pos,
 
                     TooN::makeVector(
-                            parameters[3] * cos(-statePtr->yaw * PI / 180) - 
-                                parameters[4] * sin(-statePtr->yaw * PI / 180),
-                            parameters[3] * sin(-statePtr->yaw * PI / 180) + 
-                                parameters[4] * cos(-statePtr->yaw * PI / 180),
+                            parameters[3] * cos(-statePtr->yaw * M_PI / 180) -
+                                parameters[4] * sin(-statePtr->yaw * M_PI / 180),
+                            parameters[3] * sin(-statePtr->yaw * M_PI / 180) +
+                                parameters[4] * cos(-statePtr->yaw * M_PI / 180),
                             parameters[5]) +
                         parameter_referenceZero.pos,
 
                     TooN::makeVector(
-                            parameters[6] * cos(-statePtr->yaw * PI / 180) - 
-                                parameters[7] * sin(-statePtr->yaw * PI / 180),
-                            parameters[6] * sin(-statePtr->yaw * PI / 180) + 
-                                parameters[7] * cos(-statePtr->yaw * PI / 180),
+                            parameters[6] * cos(-statePtr->yaw * M_PI / 180) -
+                                parameters[7] * sin(-statePtr->yaw * M_PI / 180),
+                            parameters[6] * sin(-statePtr->yaw * M_PI / 180) +
+                                parameters[7] * cos(-statePtr->yaw * M_PI / 180),
                             parameters[8]) +
                         parameter_referenceZero.pos,
                     TooN::makeVector(
-                            parameters[9] * cos(-statePtr->yaw * PI / 180) - 
-                                parameters[10] * sin(-statePtr->yaw * PI / 180),
-                            parameters[9] * sin(-statePtr->yaw * PI / 180) + 
-                                parameters[10] * cos(-statePtr->yaw * PI / 180),
+                            parameters[9] * cos(-statePtr->yaw * M_PI / 180) -
+                                parameters[10] * sin(-statePtr->yaw * M_PI / 180),
+                            parameters[9] * sin(-statePtr->yaw * M_PI / 180) +
+                                parameters[10] * cos(-statePtr->yaw * M_PI / 180),
                             parameters[11]) +
                         parameter_referenceZero.pos, 
                     2,
