@@ -87,11 +87,12 @@ void DroneController::setTarget(DronePosition newTarget, bool isVirtual) {
 
 	target.yaw = angleFromTo2(target.yaw, -180, 180);
 	targetSetAtClock = getMS() / 1000.0;
-	targetNew = TooN::makeVector(1.0, 1.0, 1.0, 1.0);
 	targetValid = true;
-	last_err = i_term = TooN::makeVector(0, 0, 0, 0);
 
 	if (!isVirtual) {
+		targetNew = TooN::makeVector(1.0, 1.0, 1.0, 1.0);
+		last_err = i_term = TooN::makeVector(0, 0, 0, 0);
+
 		char buf[200];
 		snprintf(buf, 200, "New Target: xyz = %.3f, %.3f, %.3f,  yaw=%.3f",
 				target.pos[0], target.pos[1], target.pos[2], target.yaw);
@@ -142,7 +143,7 @@ void DroneController::calcControl(TooN::Vector<4> new_err,
 	TooN::Vector<4> p_term = new_err; // p-term is error.
 
 	// rotate error to drone CS, invert pitch
-	double yawRad = yaw * 2 * M_PI / 360;
+	double yawRad = yaw * M_PI / 180;
 	d_term[0] = cos(yawRad) * d_error[0] - sin(yawRad) * d_error[1];
 	d_term[1] = -sin(yawRad) * d_error[0] - cos(yawRad) * d_error[1];
 
