@@ -60,7 +60,7 @@ bool KIZigZagBoard::isWayPointReached(int waypointNum, DronePosition pose) {
 					+ mdRowHeight * TooN::makeVector(0, 0, -1) - pose.pos);
 
 	// check yaw diff
-	if (fabs(pose.yaw - mdYawAngle) > 2) {
+	if (fabs(pose.yaw - mvdYawAngles[rowNum]) > 2) {
 		return false;
 	}
 	if (yawAngleL < -mdAngleH / 2 || yawAngleL > -mdAngleH / 4) {
@@ -84,7 +84,7 @@ bool KIZigZagBoard::isWayPointReached(int waypointNum, DronePosition pose) {
 //		return false;
 	}
 
-    cout << "YAWDIFF: " << fabs(pose.yaw - mdYawAngle) << endl;
+    cout << "YAWDIFF: " << fabs(pose.yaw - mvdYawAngles[rowNum]) << endl;
     cout << "L: " << yawAngleL << "\tR: " << yawAngleR << "\tR-L: " << (yawAngleR - yawAngleL) << endl;
     cout << "T: " << pitchAngleTop << "\tB: " << pitchAngleBtm << "\tB-T: " << (pitchAngleBtm - pitchAngleTop) << endl;
 	return true;
@@ -120,12 +120,13 @@ KIZigZagBoard::KIZigZagBoard(TooN::Vector<3> topLPoint,
 	TooN::Vector<3> brNormVector = TooN::unit(bEdgeVector ^ rEdgeVector);
 	TooN::Vector<3> trNormVector = TooN::unit(rEdgeVector ^ tEdgeVector);
 
-	mv3OutwardNormVector = TooN::unit(
-			(tlNormVector + blNormVector + brNormVector + trNormVector) / 4.0);
+//	mv3OutwardNormVector = TooN::unit(
+//			(tlNormVector + blNormVector + brNormVector + trNormVector) / 4.0);
+//
+//	cout << "OutwardNormVector\t" << mv3OutwardNormVector << endl;
+//
+//	mdYawAngle = vectorToYaw(-mv3OutwardNormVector);
 
-	cout << "OutwardNormVector\t" << mv3OutwardNormVector << endl;
-
-	mdYawAngle = vectorToYaw(-mv3OutwardNormVector);
 //	// yaw angle direction = arccos ( -ourwardNorm_xy . (0,1) / |-ourwardNorm_xy| * |(0,1)| )
 //	mdYawAngle =
 //			180.0 / M_PI
@@ -141,7 +142,7 @@ KIZigZagBoard::KIZigZagBoard(TooN::Vector<3> topLPoint,
 //        mdYawAngle *= -1;
 //    }
 
-	cout << "yaw\t" << mdYawAngle << endl;
+//	cout << "yaw\t" << mdYawAngle << endl;
 
 	// leftBoundary and rightBoundary
 	vector<TooN::Vector<3> > leftBoundary, rightBoundary;
@@ -160,18 +161,25 @@ KIZigZagBoard::KIZigZagBoard(TooN::Vector<3> topLPoint,
 		rightBoundary.push_back(rightBoundary.back() + rightLevelHeightVector);
 	}
 
+	// For each row, compute leftToRightUnitVector, outwardNormVector, yawAngle
 	for (int i = 0; i < miNumOfRows; i++) {
 		mvv3LeftToRightUnitVectors.push_back(
 				TooN::unit(rightBoundary[i] - leftBoundary[i]));
+		mvv3OutwardNormVectors.push_back(
+				TooN::unit(
+						TooN::makeVector(0, 0, -1)
+								^ mvv3LeftToRightUnitVectors[i]));
+		mvdYawAngles.push_back(vectorToYaw(-mvv3OutwardNormVectors[i]));
 		cout << "ROW " << i << ": Left " << leftBoundary[i] << "\tRight "
 				<< rightBoundary[i] << "\tUnit "
-				<< mvv3LeftToRightUnitVectors[i] << endl;
+				<< mvv3LeftToRightUnitVectors[i] << "\tOutward "
+				<< mvv3OutwardNormVectors[i] << "\tYaw " << mvdYawAngles[i]
+				<< endl;
 	}
 
 	// row height and col width for each camera view
 	mdRowHeight = max(-leftLevelHeightVector[2], -rightLevelHeightVector[2]);
 	mdColWidth = mdRowHeight * mdAngleH / mdAngleV;
-
 	cout << "RowHeight:ColWidth\t" << mdRowHeight << ":" << mdColWidth << endl;
 
 	// number of cols
@@ -192,11 +200,11 @@ KIZigZagBoard::KIZigZagBoard(TooN::Vector<3> topLPoint,
 		leftMostWayPoints.push_back(
 				leftBoundary[i] + mdRowHeight / 2 * TooN::makeVector(0, 0, -1)
 						+ mdColWidth / 2 * mvv3LeftToRightUnitVectors[i]
-						+ mdDistToBoard * mv3OutwardNormVector);
+						+ mdDistToBoard * mvv3OutwardNormVectors[i]);
 		rightMostWayPoints.push_back(
 				rightBoundary[i] + mdRowHeight / 2 * TooN::makeVector(0, 0, -1)
 						- mdColWidth / 2 * mvv3LeftToRightUnitVectors[i]
-						+ mdDistToBoard * mv3OutwardNormVector);
+						+ mdDistToBoard * mvv3OutwardNormVectors[i]);
 	}
 
 	// construct landmarks and waypoints
@@ -244,7 +252,7 @@ KIZigZagBoard::~KIZigZagBoard(void) {
 bool KIZigZagBoard::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 	if (miCurrentWayPointNum < 0) {
 		miCurrentWayPointNum = 0;
-		checkpoint = DronePosition(mvvv3WayPoints[0][0], mdYawAngle);
+		checkpoint = DronePosition(mvvv3WayPoints[0][0], mvdYawAngles[0]);
 		controller->setTarget(checkpoint);
 	}
 
@@ -279,7 +287,7 @@ bool KIZigZagBoard::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 		} else {
 			int rowNum = waypointNumToRowNum(miCurrentWayPointNum);
 			int colNum = waypointNumToColNum(miCurrentWayPointNum);
-			checkpoint = DronePosition(mvvv3WayPoints[rowNum][colNum], mdYawAngle);
+			checkpoint = DronePosition(mvvv3WayPoints[rowNum][colNum], mvdYawAngles[rowNum]);
 			controller->setTarget(checkpoint);
 		}
 	}

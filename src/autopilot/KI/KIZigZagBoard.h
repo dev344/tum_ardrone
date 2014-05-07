@@ -17,11 +17,13 @@ private:
 	int miNumOfRows, miNumOfCols;
 	double mdAngleH, mdAngleV;
 
-	TooN::Vector<3> mv3OutwardNormVector;
-	double mdYawAngle;
+	//TooN::Vector<3> mv3OutwardNormVector;
+	//double mdYawAngle;
 	double mdRowHeight, mdColWidth, mdDistToBoard;
 
 	vector<TooN::Vector<3> > mvv3LeftToRightUnitVectors;
+	vector<TooN::Vector<3> > mvv3OutwardNormVectors;
+	vector<double> mvdYawAngles;
 	vector<vector<TooN::Vector<3> > > mvvv3LandMarks;
 	vector<vector<TooN::Vector<3> > > mvvv3WayPoints;
 	//vector<DronePosition> mvPoses;
