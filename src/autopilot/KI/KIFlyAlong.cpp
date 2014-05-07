@@ -6,13 +6,7 @@
 KIFlyAlong::KIFlyAlong(DronePosition startPose, DronePosition endPose,
 		double linearSpeed) {
 	mposeStart = startPose;
-	while (mposeStart.yaw < 0) {
-		mposeStart.yaw += 360;
-	}
 	mposeEnd = endPose;
-	while (mposeEnd.yaw < 0) {
-		mposeEnd.yaw += 360;
-	}
 	mdLinearSpeed = linearSpeed;
 
 	mv3DirectionUnitVector = TooN::unit(mposeEnd.pos - mposeStart.pos);
@@ -28,6 +22,8 @@ KIFlyAlong::KIFlyAlong(DronePosition startPose, DronePosition endPose,
 			mposeStart.yaw, mposeEnd.pos[0], mposeEnd.pos[1], mposeEnd.pos[2],
 			mposeEnd.yaw, mdLinearSpeed);
 	command = buf;
+	
+	cout << command << endl;
 }
 
 KIFlyAlong::~KIFlyAlong(void) {
@@ -45,31 +41,31 @@ bool KIFlyAlong::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 	TooN::Vector<3> v = mv3DirectionUnitVector;
 	TooN::Vector<3> puv = (v * u) * v;	// project u onto v
 
-	// special case around start pose
-	if (v * u <= 0) {
-		controller->setTarget(
-				DronePosition(
-						mposeStart.pos + puv
-								+ mdLinearSpeed * mv3DirectionUnitVector,
-						mposeStart.yaw), true);
-	}
-
-	// special case around end pose
-	if ((v * u) + mdLinearSpeed >= mdDistance) {
+    // terminal condition
+	if (v * u >= mdDistance) {
 		controller->setTarget(mposeEnd);
-		cout << "flyAlong done!" << endl;
+		cout << "FlyAlong done!" << endl;
 		isCompleted = true;
 	}
-
+	// special case around end pose
+	else if ((v * u) + mdLinearSpeed >= mdDistance) {
+		controller->setTarget(mposeEnd, true);
+	}
+	// special case around start pose
+	else if (v * u <= 0) {
+		controller->setTarget(
+				DronePosition(
+						mposeStart.pos + mdLinearSpeed * mv3DirectionUnitVector,
+						mposeStart.yaw), true);
+	}
 	// normal case
+	else {
 	controller->setTarget(
 			DronePosition(
 					mposeStart.pos + puv
 							+ mdLinearSpeed * mv3DirectionUnitVector,
-					mposeStart.yaw
-							+ ((v * u) + mdLinearSpeed) / mdDistance
-									* (mposeEnd.yaw - mposeStart.yaw)), true);
-
+					mposeStart.yaw), true);
+    }
 	// control!
 	node->sendControlToDrone(controller->update(statePtr));
 	return false;	// not done yet (!)

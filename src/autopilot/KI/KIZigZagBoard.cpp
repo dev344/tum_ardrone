@@ -260,6 +260,7 @@ KIZigZagBoard::~KIZigZagBoard(void) {
 
 bool KIZigZagBoard::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 	if (isCompleted) {
+		mpKIHelper = NULL;
 		node->sendControlToDrone(controller->update(statePtr));
 		return true;
 	}
@@ -267,8 +268,13 @@ bool KIZigZagBoard::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 	if (miCurrentWayPointNum < 0) {
 		miCurrentWayPointNum = 0;
 		miTimer = getMS();
-		controller->setTarget(
-				DronePosition(mvvv3WayPoints[0][0], mvdYawAngles[0]));
+		
+		mpKIHelper = new KIFlyAlong(
+				DronePosition(TooN::makeVector(statePtr->x, statePtr->y, statePtr->z),
+						statePtr->yaw),
+				DronePosition(mvvv3WayPoints[0][0],
+						mvdYawAngles[0]), min(1.0, mdDistToBoard / 2));   // safe speed
+		mpKIHelper->setPointers(this->node, this->controller);
 	}
 
 	DronePosition currentPose = DronePosition(
@@ -298,30 +304,30 @@ bool KIZigZagBoard::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 			isCompleted = true;
 		} else {
 			int oldRowNum = waypointNumToRowNum(miCurrentWayPointNum - 1);
-			int oldColNum = waypointNumToRowNum(miCurrentWayPointNum - 1);
+			int oldColNum = waypointNumToColNum(miCurrentWayPointNum - 1);
 
 			int newRowNum = waypointNumToRowNum(miCurrentWayPointNum);
 			int newColNum = waypointNumToColNum(miCurrentWayPointNum);
-
+			
+			double distance = sqrt((mvvv3WayPoints[oldRowNum][oldColNum] - mvvv3WayPoints[newRowNum][newColNum]) * (mvvv3WayPoints[oldRowNum][oldColNum] - mvvv3WayPoints[newRowNum][newColNum]));
+			
 			mpKIHelper = new KIFlyAlong(
 					DronePosition(mvvv3WayPoints[oldRowNum][oldColNum],
 							mvdYawAngles[oldRowNum]),
 					DronePosition(mvvv3WayPoints[newRowNum][newColNum],
-							mvdYawAngles[newRowNum]), 0.5);
-			mpKIHelper->setPointers(this->node, this->controller);
-
+							mvdYawAngles[newRowNum]), max(0.2, distance / 2)); // speed to overcome drift
+		    mpKIHelper->setPointers(this->node, this->controller);
 			cout << "Distance to next waypoint is "
 					<< mpKIHelper->getDistance()
 					<< endl;
 		}
 	}
-
-	if (mpKIHelper != NULL) {
-		mpKIHelper->update(statePtr);
-	}
-
+	
+	mpKIHelper->update(statePtr);
+	return false;
+	
 	// control!
-	node->sendControlToDrone(controller->update(statePtr));
-	return false;	// not done yet (!)
+//	node->sendControlToDrone(controller->update(statePtr));
+//	return false;	// not done yet (!)
 }
 
