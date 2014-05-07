@@ -84,7 +84,7 @@ bool KIZigZagBoard::isWayPointReached(int waypointNum, DronePosition pose) {
 //		return false;
 	}
 
-    cout << "YAWDIFF: " << fabs(pose.yaw - mvdYawAngles[rowNum]) << endl;
+    cout << "YawDiff: " << fabs(pose.yaw - mvdYawAngles[rowNum])  << "\tDistDiff:" << sqrt((mvvv3WayPoints[rowNum][colNum] - pose.pos) * (mvvv3WayPoints[rowNum][colNum] - pose.pos)) << endl;
     cout << "L: " << yawAngleL << "\tR: " << yawAngleR << "\tR-L: " << (yawAngleR - yawAngleL) << endl;
     cout << "T: " << pitchAngleTop << "\tB: " << pitchAngleBtm << "\tB-T: " << (pitchAngleBtm - pitchAngleTop) << endl;
 	return true;
