@@ -43,16 +43,13 @@ double KIZigZagBoard::vectorToPitch(TooN::Vector<3> v) {
 bool KIZigZagBoard::isWayPointReached(int waypointNum, DronePosition pose) {
 	int rowNum = waypointNumToRowNum(waypointNum);
 	int colNum = waypointNumToColNum(waypointNum);
-	// check yaw diff
-	if (fabs(pose.yaw - mdYawAngle) > 2) {
-		return false;
-	}
-
-	double yawAngleL = vectorToYaw(mvvv3LandMarks[rowNum][colNum] - pose.pos);
+	
+	double yawAngleL = vectorToYaw(mvvv3LandMarks[rowNum][colNum] - pose.pos) - pose.yaw;
+	
 	double yawAngleR = vectorToYaw(
 			mvvv3LandMarks[rowNum][colNum]
 					+ mdColWidth * mvv3LeftToRightUnitVectors[rowNum]
-					- pose.pos);
+					- pose.pos) - pose.yaw;
 	double pitchAngleTop = vectorToPitch(
 			mvvv3LandMarks[rowNum][colNum]
 					+ mdColWidth / 2 * mvv3LeftToRightUnitVectors[rowNum]
@@ -62,21 +59,34 @@ bool KIZigZagBoard::isWayPointReached(int waypointNum, DronePosition pose) {
 					+ mdColWidth / 2 * mvv3LeftToRightUnitVectors[rowNum]
 					+ mdRowHeight * TooN::makeVector(0, 0, -1) - pose.pos);
 
-	if (yawAngleL < -mdAngleH / 2 || yawAngleR > mdAngleH / 2) {
+	// check yaw diff
+	if (fabs(pose.yaw - mdYawAngle) > 2) {
 		return false;
+	}
+	if (yawAngleL < -mdAngleH / 2 || yawAngleL > -mdAngleH / 4) {
+		return false;
+	}
+	if (yawAngleR > mdAngleH / 2 || yawAngleR < mdAngleH / 4) {
+	    return false;
 	}
 	if (yawAngleR - yawAngleL < 0.5 * mdAngleH
 			|| yawAngleR - yawAngleL > 0.7 * mdAngleH) {
+//		return false;
+	}
+	if (pitchAngleTop < -mdAngleV / 2 || pitchAngleTop > -mdAngleV / 4){
 		return false;
 	}
-	if (pitchAngleTop < -mdAngleV / 2 || pitchAngleBtm > mdAngleV / 2) {
-		return false;
+	if (pitchAngleBtm > mdAngleV / 2 || pitchAngleBtm < mdAngleV / 4) {
+	    return false;
 	}
 	if (pitchAngleBtm - pitchAngleTop < 0.5 * mdAngleV
 			|| pitchAngleBtm - pitchAngleTop > 0.7 * mdAngleV) {
-		return false;
+//		return false;
 	}
 
+    cout << "YAWDIFF: " << fabs(pose.yaw - mdYawAngle) << endl;
+    cout << "L: " << yawAngleL << "\tR: " << yawAngleR << "\tR-L: " << (yawAngleR - yawAngleL) << endl;
+    cout << "T: " << pitchAngleTop << "\tB: " << pitchAngleBtm << "\tB-T: " << (pitchAngleBtm - pitchAngleTop) << endl;
 	return true;
 }
 
@@ -134,8 +144,7 @@ KIZigZagBoard::KIZigZagBoard(TooN::Vector<3> topLPoint,
 	cout << "yaw\t" << mdYawAngle << endl;
 
 	// leftBoundary and rightBoundary
-	vector<TooN::Vector<3> > leftBoundary, rightBoundary,
-			mvv3LeftToRightUnitVectors;
+	vector<TooN::Vector<3> > leftBoundary, rightBoundary;
 	TooN::Vector<3> leftLevelHeightVector = (mv3BtmLPoint - mv3TopLPoint)
 			/ miNumOfRows;
 	TooN::Vector<3> rightLevelHeightVector = (mv3BtmRPoint - mv3TopRPoint)
@@ -244,7 +253,6 @@ bool KIZigZagBoard::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 		return true;
 	}
 
-	// get target dist:
 	DronePosition currentPose = DronePosition(
 			TooN::makeVector(statePtr->x, statePtr->y, statePtr->z),
 			statePtr->yaw);

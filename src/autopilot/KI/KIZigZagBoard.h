@@ -55,7 +55,7 @@ private:
 		if (waypointNumToRowNum(waypointNum) % 2 == 0) {
 			return waypointNum % miNumOfCols;
 		} else {
-			return miNumOfCols - waypointNum % miNumOfCols;
+			return miNumOfCols - 1 - waypointNum % miNumOfCols;
 		}
 	}
 
