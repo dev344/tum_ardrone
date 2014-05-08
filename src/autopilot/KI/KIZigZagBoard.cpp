@@ -12,33 +12,33 @@
 #include "std_msgs/String.h"
 #include <sstream>
 
-double KIZigZagBoard::vectorToYaw(TooN::Vector<3> v) {
-	// base vector = (0,1,0)
-	// yaw angle = arccos ( v<2> . (0,1) / |v<2>| * |(0,1)| )
-	double result = 180.0 / M_PI
-			* acos(v[1] / sqrt(v.slice<0, 2>() * v.slice<0, 2>()));
-
-	// check x value in v to determine sign
-	if (v[0] < 0) {
-		result *= -1;
-	}
-
-	return result;
-}
-
-double KIZigZagBoard::vectorToPitch(TooN::Vector<3> v) {
-	// base vector = (v[0], v[1],0)
-	// pitch angle = arccos ( v . (v[0],v[1],0) / |v| * |(v[0],v[1],0)|
-	double result = 180.0 / M_PI
-			* acos(
-					v.slice<0, 2>() * v.slice<0, 2>()
-							/ (sqrt(v * v)
-									* sqrt(v.slice<0, 2>() * v.slice<0, 2>())));
-	if (v[2] > 0) {
-		result *= -1;
-	}
-	return result;
-}
+//double KIZigZagBoard::vectorToYaw(TooN::Vector<3> v) {
+//	// base vector = (0,1,0)
+//	// yaw angle = arccos ( v<2> . (0,1) / |v<2>| * |(0,1)| )
+//	double result = 180.0 / M_PI
+//			* acos(v[1] / sqrt(v.slice<0, 2>() * v.slice<0, 2>()));
+//
+//	// check x value in v to determine sign
+//	if (v[0] < 0) {
+//		result *= -1;
+//	}
+//
+//	return result;
+//}
+//
+//double KIZigZagBoard::vectorToPitch(TooN::Vector<3> v) {
+//	// base vector = (v[0], v[1],0)
+//	// pitch angle = arccos ( v . (v[0],v[1],0) / |v| * |(v[0],v[1],0)|
+//	double result = 180.0 / M_PI
+//			* acos(
+//					v.slice<0, 2>() * v.slice<0, 2>()
+//							/ (sqrt(v * v)
+//									* sqrt(v.slice<0, 2>() * v.slice<0, 2>())));
+//	if (v[2] > 0) {
+//		result *= -1;
+//	}
+//	return result;
+//}
 
 bool KIZigZagBoard::isWayPointReached(int waypointNum, DronePosition pose) {
 	int rowNum = waypointNumToRowNum(waypointNum);

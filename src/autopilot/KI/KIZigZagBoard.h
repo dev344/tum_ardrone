@@ -42,15 +42,15 @@ private:
 
 	int miTimer;
 
-	// (0,1,z) -> yaw = 0
-	// clockwise -> yaw > 0
-	// otherwise -> yaw < 0
-	double vectorToYaw(TooN::Vector<3> v);
-
-	// horizon -> pitch = 0
-	// downward -> pitch > 0
-	// otherwise -> pitch < 0
-	double vectorToPitch(TooN::Vector<3> v);
+//	// (0,1,z) -> yaw = 0
+//	// clockwise -> yaw > 0
+//	// otherwise -> yaw < 0
+//	double vectorToYaw(TooN::Vector<3> v);
+//
+//	// horizon -> pitch = 0
+//	// downward -> pitch > 0
+//	// otherwise -> pitch < 0
+//	double vectorToPitch(TooN::Vector<3> v);
 
 	inline int waypointNumToRowNum(int waypointNum) {
 		return waypointNum / miNumOfCols;

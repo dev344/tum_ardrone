@@ -3,6 +3,21 @@
 #include "../ControlNode.h"
 #include "../../HelperFunctions.h"
 
+ControlCommand KIFlyAlong::ctrlCmdAlongDirection(double yaw) {
+	double yawRad = yaw * M_PI / 180;
+	ControlCommand result;
+	result.roll = mdLinearSpeed
+			* (mv3DirectionUnitVector[0] * cos(yawRad)
+					- mv3DirectionUnitVector[1] * sin(yawRad));
+	result.pitch = mdLinearSpeed
+			* (-mv3DirectionUnitVector[0] * sin(yawRad)
+					- mv3DirectionUnitVector[1] * cos(yawRad));
+	result.gaz = mdLinearSpeed * (mv3DirectionUnitVector[2])
+			* this->controller->rise_fac;
+	result.yaw = 0;
+	return result;
+}
+
 KIFlyAlong::KIFlyAlong(DronePosition startPose, DronePosition endPose,
 		double linearSpeed) {
 	mposeStart = startPose;
@@ -22,7 +37,7 @@ KIFlyAlong::KIFlyAlong(DronePosition startPose, DronePosition endPose,
 			mposeStart.yaw, mposeEnd.pos[0], mposeEnd.pos[1], mposeEnd.pos[2],
 			mposeEnd.yaw, mdLinearSpeed);
 	command = buf;
-	
+
 	cout << command << endl;
 }
 
@@ -41,32 +56,32 @@ bool KIFlyAlong::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 	TooN::Vector<3> v = mv3DirectionUnitVector;
 	TooN::Vector<3> puv = (v * u) * v;	// project u onto v
 
-    // terminal condition
+	ControlCommand ctrlcmd;
+
+	// terminal condition
 	if (v * u >= mdDistance) {
-		controller->setTarget(mposeEnd);
+		controller->setTarget(mposeEnd, true);
 		cout << "FlyAlong done!" << endl;
 		isCompleted = true;
-	}
-	// special case around end pose
-	else if ((v * u) + mdLinearSpeed >= mdDistance) {
-		controller->setTarget(mposeEnd, true);
+		ctrlcmd = controller->update(statePtr);
 	}
 	// special case around start pose
 	else if (v * u <= 0) {
-		controller->setTarget(
-				DronePosition(
-						mposeStart.pos + mdLinearSpeed * mv3DirectionUnitVector,
-						mposeStart.yaw), true);
+		controller->setTarget(mposeStart, true);
+		ControlCommand pidCmd = controller->update(statePtr);
+		ControlCommand dirCmd = ctrlCmdAlongDirection(statePtr->yaw);
+		ctrlcmd = pidCmd + dirCmd;
 	}
 	// normal case
 	else {
-	controller->setTarget(
-			DronePosition(
-					mposeStart.pos + puv
-							+ mdLinearSpeed * mv3DirectionUnitVector,
-					mposeStart.yaw), true);
-    }
+		controller->setTarget(
+				DronePosition(mposeStart.pos + puv, mposeStart.yaw), true);
+		ControlCommand pidCmd = controller->update(statePtr);
+		ControlCommand dirCmd = ctrlCmdAlongDirection(statePtr->yaw);
+		ctrlcmd = pidCmd + dirCmd;
+	}
+
 	// control!
-	node->sendControlToDrone(controller->update(statePtr));
+	node->sendControlToDrone(ctrlcmd);
 	return false;	// not done yet (!)
 }

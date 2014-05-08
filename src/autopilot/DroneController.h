@@ -45,6 +45,16 @@ struct ControlCommand
         this->gaz = gaz;
     }
     double yaw, roll, pitch, gaz;
+
+    // [ziquan]
+    ControlCommand operator+(const ControlCommand& rhs) const {
+    	ControlCommand result;
+    	result.roll = this->roll + rhs.roll;
+    	result.pitch = this->pitch + rhs.pitch;
+    	result.yaw = this->yaw + rhs.yaw;
+    	result.gaz = this->gaz + rhs.gaz;
+    	return result;
+    }
 };
 
 struct DronePosition

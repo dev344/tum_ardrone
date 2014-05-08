@@ -36,7 +36,7 @@
 // x-axis: to the left
 // y-axis: up
 // z-axis: forward
-// roll rhs-system correnct
+// roll rhs-system correct
 // pitch: rhs-system *-1;
 // yaw: rhs system *-1;
 
@@ -44,9 +44,9 @@ inline static TooN::SO3<> rpy2rod(double roll, double pitch, double yaw)
 {
 	TooN::Matrix<3,3> mat;
 
-	pitch /= 180/3.14159265;
-	roll /= 180/3.14159265;
-	yaw /= -180/3.14159265;
+	pitch /= 180/M_PI;
+	roll /= 180/M_PI;
+	yaw /= -180/M_PI;
 
 	double sa = sin(yaw);	// a is yaw = psi
 	double ca = cos(yaw);
@@ -81,9 +81,9 @@ inline static void rod2rpy(TooN::SO3<> trans, double* roll, double* pitch, doubl
 	*yaw = atan2(mat(0,1)/cos(*roll),mat(0,0)/cos(*roll));
 	*pitch = atan2(mat(1,2)/cos(*roll),mat(2,2)/cos(*roll));
 	
-	*pitch *= 180/3.14159265;
-	*roll *= 180/3.14159265;
-	*yaw *= -180/3.14159265;
+	*pitch *= 180/M_PI;
+	*roll *= 180/M_PI;
+	*yaw *= -180/M_PI;
 
 
 	while(*pitch > 180) *pitch -= 360;
@@ -93,7 +93,6 @@ inline static void rod2rpy(TooN::SO3<> trans, double* roll, double* pitch, doubl
 	while(*yaw > 180) *yaw -= 360;
 	while(*yaw < -180) *yaw += 360;
 }
-
 
 
 
@@ -112,6 +111,41 @@ inline static int getMS(ros::Time stamp = ros::Time::now())
 	if(mss < 0)
 		std::cout << "ERROR: negative timestamp..."<< std::endl;
 	return mss;
+}
+
+// [ziquan]
+// (0,1,z) -> yaw = 0
+// clockwise -> yaw > 0
+// otherwise -> yaw < 0
+inline static double vectorToYaw(TooN::Vector<3> v) {
+	// base vector = (0,1,0)
+	// yaw angle = arccos ( v<2> . (0,1) / |v<2>| * |(0,1)| )
+	double result = 180.0 / M_PI
+			* acos(v[1] / sqrt(v.slice<0, 2>() * v.slice<0, 2>()));
+
+	// check x value in v to determine sign
+	if (v[0] < 0) {
+		result *= -1;
+	}
+
+	return result;
+}
+// [ziquan]
+// horizon -> pitch = 0
+// downward -> pitch > 0
+// otherwise -> pitch < 0
+inline static double vectorToPitch(TooN::Vector<3> v) {
+	// base vector = (v[0], v[1],0)
+	// pitch angle = arccos ( v . (v[0],v[1],0) / |v| * |(v[0],v[1],0)|
+	double result = 180.0 / M_PI
+			* acos(
+					v.slice<0, 2>() * v.slice<0, 2>()
+							/ (sqrt(v * v)
+									* sqrt(v.slice<0, 2>() * v.slice<0, 2>())));
+	if (v[2] > 0) {
+		result *= -1;
+	}
+	return result;
 }
 
 #endif /* __HELPERFUNCTIONS_H */

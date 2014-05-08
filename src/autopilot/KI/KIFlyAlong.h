@@ -17,11 +17,14 @@ private:
 
 	bool isCompleted;
 
+	ControlCommand ctrlCmdAlongDirection(double yaw);
+
 public:
 	KIFlyAlong(DronePosition startPose, DronePosition endPose,
 			double linearSpeed);
 
 	~KIFlyAlong(void);
+
 	bool update(const tum_ardrone::filter_stateConstPtr statePtr);
 
 	inline double getDistance() { return mdDistance; }
