@@ -15,6 +15,7 @@ private:
 	TooN::Vector<3> mv3DirectionUnitVector;
 	double mdDistance;
 
+    bool isNear;
 	bool isCompleted;
 
 	ControlCommand ctrlCmdAlongDirection(double yaw);

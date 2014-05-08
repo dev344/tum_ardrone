@@ -12,8 +12,7 @@ ControlCommand KIFlyAlong::ctrlCmdAlongDirection(double yaw) {
 	result.pitch = mdLinearSpeed
 			* (-mv3DirectionUnitVector[0] * sin(yawRad)
 					- mv3DirectionUnitVector[1] * cos(yawRad));
-	result.gaz = mdLinearSpeed * (mv3DirectionUnitVector[2])
-			* this->controller->rise_fac;
+	result.gaz = mdLinearSpeed * (mv3DirectionUnitVector[2]);
 	result.yaw = 0;
 	return result;
 }
@@ -28,6 +27,7 @@ KIFlyAlong::KIFlyAlong(DronePosition startPose, DronePosition endPose,
 	mdDistance = sqrt(
 			(mposeEnd.pos - mposeStart.pos) * (mposeEnd.pos - mposeStart.pos));
 
+    isNear = false;
 	isCompleted = false;
 
 	char buf[200];
@@ -57,12 +57,23 @@ bool KIFlyAlong::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 	TooN::Vector<3> puv = (v * u) * v;	// project u onto v
 
 	ControlCommand ctrlcmd;
-
+	
 	// terminal condition
 	if (v * u >= mdDistance) {
-		controller->setTarget(mposeEnd, true);
+		if (!isNear) {
+		    controller->setTarget(mposeEnd);
+		    isNear = true;
+		}
+		ctrlcmd = controller->update(statePtr);
 		cout << "FlyAlong done!" << endl;
 		isCompleted = true;
+	}
+    // special case around end pose
+	else if ((v * u) + mdLinearSpeed >= mdDistance) {
+    	if(!isNear) {
+		    controller->setTarget(mposeEnd);
+		    isNear = true;
+		}
 		ctrlcmd = controller->update(statePtr);
 	}
 	// special case around start pose
@@ -79,6 +90,9 @@ bool KIFlyAlong::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 		ControlCommand pidCmd = controller->update(statePtr);
 		ControlCommand dirCmd = ctrlCmdAlongDirection(statePtr->yaw);
 		ctrlcmd = pidCmd + dirCmd;
+		//cout << "PID: roll " << pidCmd.roll << "\tpitch " << pidCmd.pitch << "\tgaz " << pidCmd.gaz << "\tyaw " << pidCmd.yaw << endl;
+		//cout << "DIR: roll " << dirCmd.roll << "\tpitch " << dirCmd.pitch << "\tgaz " << dirCmd.gaz << "\tyaw " << dirCmd.yaw << endl;
+		//cout << "CTRL: roll " << ctrlcmd.roll << "\tpitch " << ctrlcmd.pitch << "\tgaz " << ctrlcmd.gaz << "\tyaw " << ctrlcmd.yaw << endl;
 	}
 
 	// control!
