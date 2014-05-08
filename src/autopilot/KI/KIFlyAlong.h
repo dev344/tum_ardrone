@@ -17,7 +17,7 @@ private:
 
 	bool isCompleted;
 
-	ControlCommand ctrlCmdAlongDirection(vector<3> error, double yaw);
+	ControlCommand ctrlCmdAlongDirection(TooN::Vector<3> error, double yaw);
 
 public:
 	KIFlyAlong(DronePosition startPose, DronePosition endPose,

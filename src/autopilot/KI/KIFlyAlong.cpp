@@ -3,7 +3,7 @@
 #include "../ControlNode.h"
 #include "../../HelperFunctions.h"
 
-ControlCommand KIFlyAlong::ctrlCmdAlongDirection(vector<3> error, double yaw) {
+ControlCommand KIFlyAlong::ctrlCmdAlongDirection(TooN::Vector<3> error, double yaw) {
 	double yawRad = yaw * M_PI / 180;
 	ControlCommand result;
 	if (sqrt(error * error) > mdLinearSpeed) {
