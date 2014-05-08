@@ -18,7 +18,7 @@ private:
     bool isNear;
 	bool isCompleted;
 
-	ControlCommand ctrlCmdAlongDirection(double yaw);
+	ControlCommand ctrlCmdAlongDirection(vector<3> error, double yaw);
 
 public:
 	KIFlyAlong(DronePosition startPose, DronePosition endPose,
