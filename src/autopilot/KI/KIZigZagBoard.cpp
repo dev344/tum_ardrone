@@ -61,28 +61,28 @@ bool KIZigZagBoard::isWayPointReached(int waypointNum, DronePosition pose) {
 					+ mdRowHeight * TooN::makeVector(0, 0, -1) - pose.pos);
 
 	// check yaw diff
-	if (fabs(pose.yaw - mvdYawAngles[rowNum]) > 2) {
+	if (fabs(pose.yaw - mvdYawAngles[rowNum]) > 1) {
 		return false;
 	}
-	if (yawAngleL < -mdAngleH / 2 || yawAngleL > -mdAngleH / 4) {
+	if (yawAngleL < -mdAngleH / 2 || yawAngleL > -mdAngleH / 5) {
 		return false;
 	}
-	if (yawAngleR > mdAngleH / 2 || yawAngleR < mdAngleH / 4) {
+	if (yawAngleR > mdAngleH / 2 || yawAngleR < mdAngleH / 5) {
 		return false;
 	}
 	if (yawAngleR - yawAngleL < 0.5 * mdAngleH
 			|| yawAngleR - yawAngleL > 0.7 * mdAngleH) {
-//		return false;
+		//return false;
 	}
-	if (pitchAngleTop < -mdAngleV / 2 || pitchAngleTop > -mdAngleV / 4) {
+	if (pitchAngleTop < -mdAngleV / 2 || pitchAngleTop > -mdAngleV / 5) {
 		return false;
 	}
-	if (pitchAngleBtm > mdAngleV / 2 || pitchAngleBtm < mdAngleV / 4) {
+	if (pitchAngleBtm > mdAngleV / 2 || pitchAngleBtm < mdAngleV / 5) {
 		return false;
 	}
 	if (pitchAngleBtm - pitchAngleTop < 0.5 * mdAngleV
 			|| pitchAngleBtm - pitchAngleTop > 0.7 * mdAngleV) {
-//		return false;
+		//return false;
 	}
 
 	cout << "YawDiff: " << fabs(pose.yaw - mvdYawAngles[rowNum])
@@ -273,7 +273,7 @@ bool KIZigZagBoard::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 				DronePosition(TooN::makeVector(statePtr->x, statePtr->y, statePtr->z),
 						statePtr->yaw),
 				DronePosition(mvvv3WayPoints[0][0],
-						mvdYawAngles[0]), min(1.0, mdDistToBoard / 2));   // safe speed
+						mvdYawAngles[0]), min(1.0, mdDistToBoard / 4));   // safe speed
 		mpKIHelper->setPointers(this->node, this->controller);
 	}
 
@@ -315,7 +315,7 @@ bool KIZigZagBoard::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 					DronePosition(mvvv3WayPoints[oldRowNum][oldColNum],
 							mvdYawAngles[oldRowNum]),
 					DronePosition(mvvv3WayPoints[newRowNum][newColNum],
-							mvdYawAngles[newRowNum]), max(0.2, distance / 2)); // speed to overcome drift
+							mvdYawAngles[newRowNum]), max(0.2, distance / 4)); // speed to overcome drift
 		    mpKIHelper->setPointers(this->node, this->controller);
 			cout << "Distance to next waypoint is "
 					<< mpKIHelper->getDistance()

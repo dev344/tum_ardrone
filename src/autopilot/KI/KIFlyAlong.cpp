@@ -6,7 +6,7 @@
 ControlCommand KIFlyAlong::ctrlCmdAlongDirection(TooN::Vector<3> error, double yaw) {
 	double yawRad = yaw * M_PI / 180;
 	ControlCommand result;
-	if (sqrt(error * error) > mdLinearSpeed) {
+	if (sqrt(error * error) < mdLinearSpeed) {
 		result.roll = (error[0] * cos(yawRad) - error[1] * sin(yawRad));
 		result.pitch = (-error[0] * sin(yawRad) - error[1] * cos(yawRad));
 		result.gaz = error[2];
@@ -73,7 +73,8 @@ bool KIFlyAlong::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 	}
 	// special case around start pose
 	else if (v * u <= 0) {
-		controller->setTarget(mposeStart, true);
+		controller->setTarget(
+		        DronePosition(mposeStart.pos + puv, mposeEnd.yaw), true);
 		ControlCommand pidCmd = controller->update(statePtr);
 		ControlCommand dirCmd = ctrlCmdAlongDirection(
 				mposeEnd.pos - mposeStart.pos, statePtr->yaw);
@@ -82,10 +83,10 @@ bool KIFlyAlong::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 	// normal case
 	else {
 		controller->setTarget(
-				DronePosition(mposeStart.pos + puv, mposeStart.yaw), true);
+				DronePosition(mposeStart.pos + puv, mposeEnd.yaw), true);
 		ControlCommand pidCmd = controller->update(statePtr);
 		ControlCommand dirCmd = ctrlCmdAlongDirection(
-				mposeEnd.pos - mposeStart.pos + puv, statePtr->yaw);
+				mposeEnd.pos - (mposeStart.pos + puv), statePtr->yaw);
 		ctrlcmd = pidCmd + dirCmd;
 		//cout << "PID: roll " << pidCmd.roll << "\tpitch " << pidCmd.pitch << "\tgaz " << pidCmd.gaz << "\tyaw " << pidCmd.yaw << endl;
 		//cout << "DIR: roll " << dirCmd.roll << "\tpitch " << dirCmd.pitch << "\tgaz " << dirCmd.gaz << "\tyaw " << dirCmd.yaw << endl;
