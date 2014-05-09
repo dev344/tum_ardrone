@@ -18,39 +18,20 @@ private:
 	int miNumOfRows, miNumOfCols;
 	double mdAngleH, mdAngleV;
 
-	//TooN::Vector<3> mv3OutwardNormVector;
-	//double mdYawAngle;
 	double mdRowHeight, mdColWidth, mdDistToBoard;
+	double mdMinDistToBoard;
 
 	vector<TooN::Vector<3> > mvv3LeftToRightUnitVectors;
 	vector<TooN::Vector<3> > mvv3OutwardNormVectors;
 	vector<double> mvdYawAngles;
 	vector<vector<TooN::Vector<3> > > mvvv3LandMarks;
 	vector<vector<TooN::Vector<3> > > mvvv3WayPoints;
-	//vector<DronePosition> mvPoses;
+
 	int miCurrentWayPointNum;
 
-	//int reachedAtClock;
-	//bool reached;
 	bool isCompleted;
 
-	//int stayTimeMs;
-	//double reachedDist;
-	//double stayWithinDist;
-
-	//DronePosition checkpoint;
-
 	int miTimer;
-
-//	// (0,1,z) -> yaw = 0
-//	// clockwise -> yaw > 0
-//	// otherwise -> yaw < 0
-//	double vectorToYaw(TooN::Vector<3> v);
-//
-//	// horizon -> pitch = 0
-//	// downward -> pitch > 0
-//	// otherwise -> pitch < 0
-//	double vectorToPitch(TooN::Vector<3> v);
 
 	inline int waypointNumToRowNum(int waypointNum) {
 		return waypointNum / miNumOfCols;

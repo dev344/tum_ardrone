@@ -33,6 +33,7 @@ KIFlyAlong::KIFlyAlong(DronePosition startPose, DronePosition endPose,
 	mv3DirectionUnitVector = TooN::unit(mposeEnd.pos - mposeStart.pos);
 	mdDistance = sqrt(
 			(mposeEnd.pos - mposeStart.pos) * (mposeEnd.pos - mposeStart.pos));
+	mdAngleDistance = angleToValidYaw(endPose.yaw - startPose.yaw);
 
 	isCompleted = false;
 
@@ -74,7 +75,7 @@ bool KIFlyAlong::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 	// special case around start pose
 	else if (v * u <= 0) {
 		controller->setTarget(
-		        DronePosition(mposeStart.pos + puv, mposeEnd.yaw), true);
+		        DronePosition(mposeStart.pos + puv, mposeStart.yaw), true);
 		ControlCommand pidCmd = controller->update(statePtr);
 		ControlCommand dirCmd = ctrlCmdAlongDirection(
 				mposeEnd.pos - mposeStart.pos, statePtr->yaw);
@@ -83,7 +84,7 @@ bool KIFlyAlong::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 	// normal case
 	else {
 		controller->setTarget(
-				DronePosition(mposeStart.pos + puv, mposeEnd.yaw), true);
+				DronePosition(mposeStart.pos + puv, mposeStart.yaw + (v * u) / mdDistance * mdAngleDistance), true);
 		ControlCommand pidCmd = controller->update(statePtr);
 		ControlCommand dirCmd = ctrlCmdAlongDirection(
 				mposeEnd.pos - (mposeStart.pos + puv), statePtr->yaw);

@@ -12,34 +12,6 @@
 #include "std_msgs/String.h"
 #include <sstream>
 
-//double KIZigZagBoard::vectorToYaw(TooN::Vector<3> v) {
-//	// base vector = (0,1,0)
-//	// yaw angle = arccos ( v<2> . (0,1) / |v<2>| * |(0,1)| )
-//	double result = 180.0 / M_PI
-//			* acos(v[1] / sqrt(v.slice<0, 2>() * v.slice<0, 2>()));
-//
-//	// check x value in v to determine sign
-//	if (v[0] < 0) {
-//		result *= -1;
-//	}
-//
-//	return result;
-//}
-//
-//double KIZigZagBoard::vectorToPitch(TooN::Vector<3> v) {
-//	// base vector = (v[0], v[1],0)
-//	// pitch angle = arccos ( v . (v[0],v[1],0) / |v| * |(v[0],v[1],0)|
-//	double result = 180.0 / M_PI
-//			* acos(
-//					v.slice<0, 2>() * v.slice<0, 2>()
-//							/ (sqrt(v * v)
-//									* sqrt(v.slice<0, 2>() * v.slice<0, 2>())));
-//	if (v[2] > 0) {
-//		result *= -1;
-//	}
-//	return result;
-//}
-
 bool KIZigZagBoard::isWayPointReached(int waypointNum, DronePosition pose) {
 	int rowNum = waypointNumToRowNum(waypointNum);
 	int colNum = waypointNumToColNum(waypointNum);
@@ -128,30 +100,6 @@ KIZigZagBoard::KIZigZagBoard(TooN::Vector<3> topLPoint,
 	TooN::Vector<3> brNormVector = TooN::unit(bEdgeVector ^ rEdgeVector);
 	TooN::Vector<3> trNormVector = TooN::unit(rEdgeVector ^ tEdgeVector);
 
-//	mv3OutwardNormVector = TooN::unit(
-//			(tlNormVector + blNormVector + brNormVector + trNormVector) / 4.0);
-//
-//	cout << "OutwardNormVector\t" << mv3OutwardNormVector << endl;
-//
-//	mdYawAngle = vectorToYaw(-mv3OutwardNormVector);
-
-//	// yaw angle direction = arccos ( -ourwardNorm_xy . (0,1) / |-ourwardNorm_xy| * |(0,1)| )
-//	mdYawAngle =
-//			180.0 / M_PI
-//					* acos(
-//							-mv3OutwardNormVector[1]
-//									/ sqrt(
-//											mv3OutwardNormVector.slice<0, 2>()
-//													* mv3OutwardNormVector.slice<
-//															0, 2>()));
-//
-//    // check x value in diff to determine sign
-//    if (mv3OutwardNormVector[0] > 0) {
-//        mdYawAngle *= -1;
-//    }
-
-//	cout << "yaw\t" << mdYawAngle << endl;
-
 	// leftBoundary and rightBoundary
 	vector<TooN::Vector<3> > leftBoundary, rightBoundary;
 	TooN::Vector<3> leftLevelHeightVector = (mv3BtmLPoint - mv3TopLPoint)
@@ -186,21 +134,24 @@ KIZigZagBoard::KIZigZagBoard(TooN::Vector<3> topLPoint,
 	}
 
 	// row height and col width for each camera view
-	mdRowHeight = max(-leftLevelHeightVector[2], -rightLevelHeightVector[2]);
-	mdColWidth = mdRowHeight * mdAngleH / mdAngleV;
-	cout << "RowHeight:ColWidth\t" << mdRowHeight << ":" << mdColWidth << endl;
+	mdMinDistToBoard = 1;
+	double tanHalfAngleV = sin(mdAngleV / 2 * M_PI / 180)
+			/ cos(mdAngleV / 2 * M_PI / 180);
+	double minRowHeight = mdMinDistToBoard * 2 * tanHalfAngleV * 0.6;
+	mdRowHeight = max(minRowHeight,
+			max(-leftLevelHeightVector[2], -rightLevelHeightVector[2]));
+	mdDistToBoard = mdRowHeight / 2 / tanHalfAngleV / 0.6;
+	double tanHalfAngleH = sin(mdAngleH / 2 * M_PI / 180)
+			/ cos(mdAngleH / 2 * M_PI / 180);
+	mdColWidth = mdDistToBoard * 2 * tanHalfAngleH * 0.6;
+	cout << "RowHeight:ColWidth:DistToBoard\t" << mdRowHeight << ":"
+			<< mdColWidth << ":" << mdDistToBoard << endl;
 
 	// number of cols
 	miNumOfCols = (int) ceil(
 			max(sqrt(tEdgeVector * tEdgeVector),
 					sqrt(bEdgeVector * bEdgeVector)) / mdColWidth);
 	cout << "Num of rows:cols\t" << miNumOfRows << ":" << miNumOfCols << endl;
-
-	// distance to board
-	double cotHalfAngleV = cos(mdAngleV / 2 * M_PI / 180)
-			/ sin(mdAngleV / 2 * M_PI / 180);
-	mdDistToBoard = cotHalfAngleV * mdRowHeight / 2 / 0.6;
-	cout << "Distance to board\t" << mdDistToBoard << endl;
 
 	// leftmost and rightmost way points
 	vector<TooN::Vector<3> > leftMostWayPoints, rightMostWayPoints;
@@ -268,12 +219,13 @@ bool KIZigZagBoard::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 	if (miCurrentWayPointNum < 0) {
 		miCurrentWayPointNum = 0;
 		miTimer = getMS();
-		
+
 		mpKIHelper = new KIFlyAlong(
-				DronePosition(TooN::makeVector(statePtr->x, statePtr->y, statePtr->z),
+				DronePosition(
+						TooN::makeVector(statePtr->x, statePtr->y, statePtr->z),
 						statePtr->yaw),
-				DronePosition(mvvv3WayPoints[0][0],
-						mvdYawAngles[0]), min(1.0, mdDistToBoard / 4));   // safe speed
+				DronePosition(mvvv3WayPoints[0][0], mvdYawAngles[0]),
+				min(1.0, mdDistToBoard / 4));   // safe speed
 		mpKIHelper->setPointers(this->node, this->controller);
 	}
 
@@ -308,24 +260,27 @@ bool KIZigZagBoard::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 
 			int newRowNum = waypointNumToRowNum(miCurrentWayPointNum);
 			int newColNum = waypointNumToColNum(miCurrentWayPointNum);
-			
-			double distance = sqrt((mvvv3WayPoints[oldRowNum][oldColNum] - mvvv3WayPoints[newRowNum][newColNum]) * (mvvv3WayPoints[oldRowNum][oldColNum] - mvvv3WayPoints[newRowNum][newColNum]));
-			
+
+			double distance = sqrt(
+					(mvvv3WayPoints[oldRowNum][oldColNum]
+							- mvvv3WayPoints[newRowNum][newColNum])
+							* (mvvv3WayPoints[oldRowNum][oldColNum]
+									- mvvv3WayPoints[newRowNum][newColNum]));
+
 			mpKIHelper = new KIFlyAlong(
 					DronePosition(mvvv3WayPoints[oldRowNum][oldColNum],
 							mvdYawAngles[oldRowNum]),
 					DronePosition(mvvv3WayPoints[newRowNum][newColNum],
 							mvdYawAngles[newRowNum]), max(0.2, distance / 4)); // speed to overcome drift
-		    mpKIHelper->setPointers(this->node, this->controller);
-			cout << "Distance to next waypoint is "
-					<< mpKIHelper->getDistance()
+			mpKIHelper->setPointers(this->node, this->controller);
+			cout << "Distance to next waypoint is " << mpKIHelper->getDistance()
 					<< endl;
 		}
 	}
-	
+
 	mpKIHelper->update(statePtr);
 	return false;
-	
+
 	// control!
 //	node->sendControlToDrone(controller->update(statePtr));
 //	return false;	// not done yet (!)

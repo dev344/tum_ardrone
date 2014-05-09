@@ -39,13 +39,13 @@ DroneController::DroneController(void) {
 DroneController::~DroneController(void) {
 }
 
-double angleFromTo2(double angle, double min, double sup) {
-	while (angle < min)
-		angle += 360;
-	while (angle >= sup)
-		angle -= 360;
-	return angle;
-}
+//double angleFromTo2(double angle, double min, double sup) {
+//	while (angle < min)
+//		angle += 360;
+//	while (angle >= sup)
+//		angle -= 360;
+//	return angle;
+//}
 
 // generates and sends a new control command to the drone, 
 // based on the currently active command ant the drone's position.
@@ -67,7 +67,7 @@ ControlCommand DroneController::update(
 
 	// yaw error needs special attention, it can always be pushed in between 180 and -180.
 	// this does not affect speeds and makes the drone always take the quickest rotation side.
-	new_err[3] = angleFromTo2(new_err[3], -180, 180);
+	new_err[3] = angleToValidYaw(new_err[3]);
 	TooN::Vector<4> d_err = TooN::makeVector(-speeds[0], -speeds[1], -speeds[2],
 			-speeds[3]);
 
@@ -85,7 +85,7 @@ ControlCommand DroneController::update(
 void DroneController::setTarget(DronePosition newTarget, bool isVirtual) {
 	target = newTarget;
 
-	target.yaw = angleFromTo2(target.yaw, -180, 180);
+	target.yaw = angleToValidYaw(target.yaw);
 	targetSetAtClock = getMS() / 1000.0;
 	targetValid = true;
 

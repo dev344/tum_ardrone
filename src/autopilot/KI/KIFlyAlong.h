@@ -13,7 +13,7 @@ private:
 	double mdLinearSpeed;
 
 	TooN::Vector<3> mv3DirectionUnitVector;
-	double mdDistance;
+	double mdDistance, mdAngleDistance;
 
 	bool isCompleted;
 

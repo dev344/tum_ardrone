@@ -792,14 +792,7 @@ void ControlNode::popNextCommand(
                 &parameters[1]) == 2)
         {
             double direction = statePtr->yaw + parameters[0]; // yaw + angle_x
-            while (direction < -180)
-            {
-                direction += 360;
-            }
-            while (direction >= 180)
-            {
-                direction -= 360;
-            }
+            direction = angleToValidYaw(direction);
             double distance = altdMM * 0.001
                     * tan(M_PI_2 - parameters[1] * M_PI / 180); // height * cot(angle_y)
             distance *= parameter_GSVScalar;
