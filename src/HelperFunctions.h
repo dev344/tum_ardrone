@@ -148,4 +148,11 @@ inline static double vectorToPitch(TooN::Vector<3> v) {
 	return result;
 }
 
+// [ziquan]
+inline static double angleToValidYaw(double angle) {
+	while (angle < -180) angle += 360;
+	while (angle >= 180) angle -= 360;
+	return angle;
+}
+
 #endif /* __HELPERFUNCTIONS_H */
