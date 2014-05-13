@@ -18,7 +18,7 @@ ControlCommand KIFlyAlong::ctrlCmdAlongDirection(TooN::Vector<3> error, double y
 		result.pitch = mdLinearSpeed
 				* (-mv3DirectionUnitVector[0] * sin(yawRad)
 						- mv3DirectionUnitVector[1] * cos(yawRad));
-		result.gaz = mdLinearSpeed * (mv3DirectionUnitVector[2]);
+		result.gaz = mdLinearSpeed * mv3DirectionUnitVector[2];
 		result.yaw = 0;
 	}
 	return result;

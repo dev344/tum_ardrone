@@ -8,8 +8,7 @@
 class KIFlyAlong: public KIProcedure {
 private:
 
-	DronePosition mposeStart;
-	DronePosition mposeEnd;
+	DronePosition mposeStart, mposeEnd;
 	double mdLinearSpeed;
 
 	TooN::Vector<3> mv3DirectionUnitVector;

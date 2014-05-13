@@ -33,6 +33,7 @@ class ControlNode;
 
 struct ControlCommand
 {
+    double yaw, roll, pitch, gaz;
     inline ControlCommand()
     {
         roll = pitch = yaw = gaz = 0;
@@ -44,7 +45,6 @@ struct ControlCommand
         this->yaw = yaw;
         this->gaz = gaz;
     }
-    double yaw, roll, pitch, gaz;
 
     // [ziquan]
     ControlCommand operator+(const ControlCommand& rhs) const {
@@ -60,16 +60,16 @@ struct ControlCommand
 struct DronePosition
 {
 public:
-    double yaw;
     TooN::Vector<3> pos;
+    double yaw;
     inline DronePosition(TooN::Vector<3> pos, double yaw) :
             pos(pos), yaw(yaw)
     {
     }
     inline DronePosition()
     {
-        yaw = 0;
         pos = TooN::makeVector(0, 0, 0);
+        yaw = 0;
     }
 };
 

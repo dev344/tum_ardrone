@@ -31,7 +31,7 @@ private:
 
 	bool isCompleted;
 
-	int miTimer;
+	int miTimer;	// compute time used between two snapshot
 
 	inline int waypointNumToRowNum(int waypointNum) {
 		return waypointNum / miNumOfCols;

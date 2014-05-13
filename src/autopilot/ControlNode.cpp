@@ -37,7 +37,7 @@
 #include "KI/KILand.h"
 #include "KI/KIFlyAlong.h"	//[ziquan]
 #include "KI/KISpin.h"		//[ziquan]
-#include "KI/KICircle.h"	//[ziquan]
+#include "KI/KIFlyAround.h"	//[ziquan]
 #include "KI/KIQLearning.h"	//[ziquan]
 #include "KI/KIModel.h"		//[ziquan]
 #include "KI/KIRepsExe.h"	//[ziquan]
@@ -661,108 +661,108 @@ void ControlNode::popNextCommand(
             commandUnderstood = true;
             currentKIString = command;
         }
-        // circleL4 [ziquan]
-        else if (sscanf(command.c_str(), "circleL %f %f %f %f", &parameters[0],
-                &parameters[1], &parameters[2], &parameters[3]) == 4)
-        {
-            TooN::Vector<3> centerPoint = TooN::makeVector(parameters[0],
-                    parameters[1], parameters[2]);
-            TooN::Vector<3> upVector = TooN::makeVector(0.0, 0.0, 1.0);
-            double radius = parameters[3];
-            currentKI = new KICircle(centerPoint, upVector, radius,
-                    parameter_LineSpeed, parameter_StayTime);
-            currentKI->setPointers(this, &controller);
-            commandUnderstood = true;
-            currentKIString = command;
-        }
-        // circleL3 [ziquan]
-        else if (sscanf(command.c_str(), "circleL %f %f %f", &parameters[0],
-                &parameters[1], &parameters[2]) == 3)
-        {
-            TooN::Vector<3> centerPoint = TooN::makeVector(parameters[0],
-                    parameters[1], parameters[2]) + parameter_referenceZero.pos;
-            TooN::Vector<3> currentPoint = TooN::makeVector(statePtr->x,
-                    statePtr->y, statePtr->z);
-            TooN::Vector<3> upVector = TooN::makeVector(0.0, 0.0, 1.0);
-            double radius = sqrt(
-                    (centerPoint - currentPoint)
-                            * (centerPoint - currentPoint));
-            currentKI = new KICircle(centerPoint, upVector, radius,
-                    parameter_LineSpeed, parameter_StayTime);
-            currentKI->setPointers(this, &controller);
-            commandUnderstood = true;
-            snprintf(buf, 100, "circleL %.3f %.3f %.3f %.3f", centerPoint[0],
-                    centerPoint[1], centerPoint[2], radius);
-            currentKIString = std::string(buf);
-        }
-        // circleR4 [ziquan]
-        else if (sscanf(command.c_str(), "circleR %f %f %f %f", &parameters[0],
-                &parameters[1], &parameters[2], &parameters[3]) == 4)
-        {
-            TooN::Vector<3> centerPoint = TooN::makeVector(parameters[0],
-                    parameters[1], parameters[2]);
-            TooN::Vector<3> upVector = TooN::makeVector(0.0, 0.0, -1.0);
-            double radius = parameters[3];
-            currentKI = new KICircle(centerPoint, upVector, radius,
-                    parameter_LineSpeed, parameter_StayTime);
-            currentKI->setPointers(this, &controller);
-            commandUnderstood = true;
-            currentKIString = command;
-        }
-        // circleR3 [ziquan]
-        else if (sscanf(command.c_str(), "circleR %f %f %f", &parameters[0],
-                &parameters[1], &parameters[2]) == 3)
-        {
-            TooN::Vector<3> centerPoint = TooN::makeVector(parameters[0],
-                    parameters[1], parameters[2]) + parameter_referenceZero.pos;
-            TooN::Vector<3> currentPoint = TooN::makeVector(statePtr->x,
-                    statePtr->y, statePtr->z);
-            TooN::Vector<3> upVector = TooN::makeVector(0.0, 0.0, -1.0);
-            double radius = sqrt(
-                    (centerPoint - currentPoint)
-                            * (centerPoint - currentPoint));
-            currentKI = new KICircle(centerPoint, upVector, radius,
-                    parameter_LineSpeed, parameter_StayTime);
-            currentKI->setPointers(this, &controller);
-            commandUnderstood = true;
-            snprintf(buf, 100, "circleR %.3f %.3f %.3f %.3f", centerPoint[0],
-                    centerPoint[1], centerPoint[2], radius);
-            currentKIString = std::string(buf);
-        }
-        else if (sscanf(command.c_str(), "circleRRelDir %f %f %f", &parameters[0],
-                &parameters[1], &parameters[2]) == 3)
-        {
-                            // acos(yaw) - bsin(yaw), asin(yaw) + bcos(yaw)
-                            // statePtr->yaw is clockwise. So, I take negative of it.
-            TooN::Vector<3> centerPoint = TooN::makeVector(
-                        parameters[0]
-                                * cos(-statePtr->yaw * M_PI / 180)
-                                - parameters[1]
-                                        * sin(
-                                                -statePtr->yaw * M_PI
-                                                        / 180),
-                        parameters[0]
-                                * sin(-statePtr->yaw * M_PI / 180)
-                                + parameters[1]
-                                        * cos(
-                                                -statePtr->yaw * M_PI
-                                                        / 180),
-                        parameters[2]) + parameter_referenceZero.pos;
-
-            TooN::Vector<3> currentPoint = TooN::makeVector(statePtr->x,
-                    statePtr->y, statePtr->z);
-            TooN::Vector<3> upVector = TooN::makeVector(0.0, 0.0, -1.0);
-            double radius = sqrt(
-                    (centerPoint - currentPoint)
-                            * (centerPoint - currentPoint));
-            currentKI = new KICircle(centerPoint, upVector, radius,
-                    parameter_LineSpeed, parameter_StayTime);
-            currentKI->setPointers(this, &controller);
-            commandUnderstood = true;
-            snprintf(buf, 100, "circleR %.3f %.3f %.3f %.3f", centerPoint[0],
-                    centerPoint[1], centerPoint[2], radius);
-            currentKIString = std::string(buf);
-        }
+//        // circleL4 [ziquan]
+//        else if (sscanf(command.c_str(), "circleL %f %f %f %f", &parameters[0],
+//                &parameters[1], &parameters[2], &parameters[3]) == 4)
+//        {
+//            TooN::Vector<3> centerPoint = TooN::makeVector(parameters[0],
+//                    parameters[1], parameters[2]);
+//            TooN::Vector<3> upVector = TooN::makeVector(0.0, 0.0, 1.0);
+//            double radius = parameters[3];
+//            currentKI = new KIFlyAround(centerPoint, upVector, radius,
+//                    parameter_LineSpeed, parameter_StayTime);
+//            currentKI->setPointers(this, &controller);
+//            commandUnderstood = true;
+//            currentKIString = command;
+//        }
+//        // circleL3 [ziquan]
+//        else if (sscanf(command.c_str(), "circleL %f %f %f", &parameters[0],
+//                &parameters[1], &parameters[2]) == 3)
+//        {
+//            TooN::Vector<3> centerPoint = TooN::makeVector(parameters[0],
+//                    parameters[1], parameters[2]) + parameter_referenceZero.pos;
+//            TooN::Vector<3> currentPoint = TooN::makeVector(statePtr->x,
+//                    statePtr->y, statePtr->z);
+//            TooN::Vector<3> upVector = TooN::makeVector(0.0, 0.0, 1.0);
+//            double radius = sqrt(
+//                    (centerPoint - currentPoint)
+//                            * (centerPoint - currentPoint));
+//            currentKI = new KIFlyAround(centerPoint, upVector, radius,
+//                    parameter_LineSpeed, parameter_StayTime);
+//            currentKI->setPointers(this, &controller);
+//            commandUnderstood = true;
+//            snprintf(buf, 100, "circleL %.3f %.3f %.3f %.3f", centerPoint[0],
+//                    centerPoint[1], centerPoint[2], radius);
+//            currentKIString = std::string(buf);
+//        }
+//        // circleR4 [ziquan]
+//        else if (sscanf(command.c_str(), "circleR %f %f %f %f", &parameters[0],
+//                &parameters[1], &parameters[2], &parameters[3]) == 4)
+//        {
+//            TooN::Vector<3> centerPoint = TooN::makeVector(parameters[0],
+//                    parameters[1], parameters[2]);
+//            TooN::Vector<3> upVector = TooN::makeVector(0.0, 0.0, -1.0);
+//            double radius = parameters[3];
+//            currentKI = new KIFlyAround(centerPoint, upVector, radius,
+//                    parameter_LineSpeed, parameter_StayTime);
+//            currentKI->setPointers(this, &controller);
+//            commandUnderstood = true;
+//            currentKIString = command;
+//        }
+//        // circleR3 [ziquan]
+//        else if (sscanf(command.c_str(), "circleR %f %f %f", &parameters[0],
+//                &parameters[1], &parameters[2]) == 3)
+//        {
+//            TooN::Vector<3> centerPoint = TooN::makeVector(parameters[0],
+//                    parameters[1], parameters[2]) + parameter_referenceZero.pos;
+//            TooN::Vector<3> currentPoint = TooN::makeVector(statePtr->x,
+//                    statePtr->y, statePtr->z);
+//            TooN::Vector<3> upVector = TooN::makeVector(0.0, 0.0, -1.0);
+//            double radius = sqrt(
+//                    (centerPoint - currentPoint)
+//                            * (centerPoint - currentPoint));
+//            currentKI = new KIFlyAround(centerPoint, upVector, radius,
+//                    parameter_LineSpeed, parameter_StayTime);
+//            currentKI->setPointers(this, &controller);
+//            commandUnderstood = true;
+//            snprintf(buf, 100, "circleR %.3f %.3f %.3f %.3f", centerPoint[0],
+//                    centerPoint[1], centerPoint[2], radius);
+//            currentKIString = std::string(buf);
+//        }
+//        else if (sscanf(command.c_str(), "circleRRelDir %f %f %f", &parameters[0],
+//                &parameters[1], &parameters[2]) == 3)
+//        {
+//                            // acos(yaw) - bsin(yaw), asin(yaw) + bcos(yaw)
+//                            // statePtr->yaw is clockwise. So, I take negative of it.
+//            TooN::Vector<3> centerPoint = TooN::makeVector(
+//                        parameters[0]
+//                                * cos(-statePtr->yaw * M_PI / 180)
+//                                - parameters[1]
+//                                        * sin(
+//                                                -statePtr->yaw * M_PI
+//                                                        / 180),
+//                        parameters[0]
+//                                * sin(-statePtr->yaw * M_PI / 180)
+//                                + parameters[1]
+//                                        * cos(
+//                                                -statePtr->yaw * M_PI
+//                                                        / 180),
+//                        parameters[2]) + parameter_referenceZero.pos;
+//
+//            TooN::Vector<3> currentPoint = TooN::makeVector(statePtr->x,
+//                    statePtr->y, statePtr->z);
+//            TooN::Vector<3> upVector = TooN::makeVector(0.0, 0.0, -1.0);
+//            double radius = sqrt(
+//                    (centerPoint - currentPoint)
+//                            * (centerPoint - currentPoint));
+//            currentKI = new KIFlyAround(centerPoint, upVector, radius,
+//                    parameter_LineSpeed, parameter_StayTime);
+//            currentKI->setPointers(this, &controller);
+//            commandUnderstood = true;
+//            snprintf(buf, 100, "circleR %.3f %.3f %.3f %.3f", centerPoint[0],
+//                    centerPoint[1], centerPoint[2], radius);
+//            currentKIString = std::string(buf);
+//        }
         // Qlearning [ziquan]
         else if (sscanf(command.c_str(), "qlearn %f %f", &parameters[0],
                 &parameters[1]) == 2)
