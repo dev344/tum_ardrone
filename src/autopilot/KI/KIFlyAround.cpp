@@ -116,10 +116,10 @@ bool KIFlyAround::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 	}
 	// normal case
 	else {
-		controller->setTarget(DronePosition(v3CheckPoint, statePtr->yaw), true);
+		controller->setTarget(DronePosition(v3CheckPoint, checkpointYaw/*statePtr->yaw*/), true);
 		ControlCommand pidCmd = controller->update(statePtr);
 		ControlCommand dirCmd = ctrlCmdAlongCircle(v3DirectionUnitVector,
-				checkpointYaw, statePtr->yaw);
+				/*checkpointYaw*/statePtr->yaw, statePtr->yaw);
 		ctrlcmd = pidCmd + dirCmd;
 	}
 

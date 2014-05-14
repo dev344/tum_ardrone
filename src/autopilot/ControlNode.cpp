@@ -661,6 +661,20 @@ void ControlNode::popNextCommand(
             commandUnderstood = true;
             currentKIString = command;
         }
+        // flyAround [ziquan]
+        else if (sscanf(command.c_str(), "goAround %f %f %f %f %f %f", 
+                &parameters[0], &parameters[1], &parameters[2], 
+                &parameters[3], &parameters[4], &parameters[5]) == 6)
+        {
+            currentKI = new KIFlyAround(TooN::makeVector(parameters[0],
+                    parameters[1], parameters[2]), parameters[3],
+			statePtr->yaw, parameters[4],
+			TooN::makeVector(0.0, 0.0, 1.0), parameters[5]);
+            currentKI->setPointers(this, &controller);
+            commandUnderstood = true;
+            currentKIString = command;
+        }
+        
 //        // circleL4 [ziquan]
 //        else if (sscanf(command.c_str(), "circleL %f %f %f %f", &parameters[0],
 //                &parameters[1], &parameters[2], &parameters[3]) == 4)
