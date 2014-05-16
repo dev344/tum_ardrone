@@ -12,7 +12,7 @@ import rospy
 import cv 
 import cv2
 import numpy as np
-from cv_bridge import CvBridge, CvBridgeError
+#from cv_bridge import CvBridge, CvBridgeError
 
 # Load the DroneController class, which handles interactions with the drone, and the DroneVideoDisplay class, which handles video display
 from drone_controller import BasicDroneController
@@ -72,7 +72,7 @@ class EventListener(DroneVideoDisplay):
         self.createButtons()
 
         self.gesture = self.NONE
-        self.bridge = CvBridge()
+        #self.bridge = CvBridge()
         self.toggle = 0
 
         self.scale_rcv_count = 0
