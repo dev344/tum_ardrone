@@ -192,6 +192,12 @@ class DroneVideoDisplay(QtGui.QMainWindow):
                         self.qimages[i]['image'].scaledToHeight(80))
                 self.qimages[i]['ToDraw'] = False
 
+                #To save images onto disk
+                intitialPath=QtCore.QDir.currentPath()+"/snapshot"+str(i)+".png"
+                self.qimages[i]['image'].save(intitialPath, "PNG")
+                print 'saved file', intitialPath
+
+
     def DrawCircles(self):
         self.tagLock.acquire()
         try:

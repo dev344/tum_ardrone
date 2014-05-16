@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 import roslib; roslib.load_manifest('rviz_python_tutorial');
-roslib.load_manifest('gazebo')
+# roslib.load_manifest('gazebo')
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Image
-from gazebo.srv import GetModelState
+# from gazebo.srv import GetModelState
 from tf.transformations import euler_from_quaternion
 from math import atan, degrees, sqrt
 

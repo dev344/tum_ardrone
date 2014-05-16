@@ -38,6 +38,8 @@ class KeyMapping(object):
     Emergency        = QtCore.Qt.Key.Key_Space
     Clear            = QtCore.Qt.Key.Key_C
     Test             = QtCore.Qt.Key.Key_Z
+    Send_stop        = QtCore.Qt.Key.Key_Backspace
+    Send_start       = QtCore.Qt.Key.Key_Shift
 
 
 # Our controller definition, note that we extend the DroneVideoDisplay class
@@ -148,6 +150,10 @@ class EventListener(DroneVideoDisplay):
                 self.scale_rcv_count = 0
                 self.toggle = 0
                 self.scale = 1.0
+            elif key == KeyMapping.Send_stop:
+                controller.can_send = False
+            elif key == KeyMapping.Send_start:
+                controller.can_send = True
             else:
                 # Now we handle moving, notice that this section is the opposite (+=) of the keyrelease section
                 if key == KeyMapping.YawLeft:
@@ -585,6 +591,10 @@ class EventListener(DroneVideoDisplay):
             partition_count = 0
             current_population = 0
             current = points[0][2]
+
+            # Adding one last point to enable the code 
+            # to go to else condition after last point.
+            points.append([0, 0, 100, 0, 0])
             for point in points:
                 if abs(point[2]-current) < 0.1:
                     current_population += 1
