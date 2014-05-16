@@ -662,7 +662,7 @@ void ControlNode::popNextCommand(
             currentKIString = command;
         }
         // flyAround [ziquan]
-        else if (sscanf(command.c_str(), "goAround %f %f %f %f %f %f", 
+        else if (sscanf(command.c_str(), "goAroundR %f %f %f %f %f %f", 
                 &parameters[0], &parameters[1], &parameters[2], 
                 &parameters[3], &parameters[4], &parameters[5]) == 6)
         {
@@ -670,6 +670,99 @@ void ControlNode::popNextCommand(
                     parameters[1], parameters[2]), parameters[3],
 			statePtr->yaw, parameters[4],
 			TooN::makeVector(0.0, 0.0, 1.0), parameters[5]);
+            currentKI->setPointers(this, &controller);
+            commandUnderstood = true;
+            currentKIString = command;
+        }
+
+        else if (sscanf(command.c_str(), "goAroundL %f %f %f %f %f %f", 
+                &parameters[0], &parameters[1], &parameters[2], 
+                &parameters[3], &parameters[4], &parameters[5]) == 6)
+        {
+            currentKI = new KIFlyAround(TooN::makeVector(parameters[0],
+                    parameters[1], parameters[2]), parameters[3],
+			statePtr->yaw, parameters[4],
+			TooN::makeVector(0.0, 0.0, -1.0), parameters[5]);
+            currentKI->setPointers(this, &controller);
+            commandUnderstood = true;
+            currentKIString = command;
+        }
+
+        // [Devesh]
+        // goAroundRepeat direction rotation_angle
+        else if (sscanf(command.c_str(), "goAroundRepeat %f %f", 
+                &parameters[0], &parameters[1]) == 2)
+        {
+            currentKI = new KIFlyAround(stored_center, stored_radius,
+			statePtr->yaw, parameters[1],
+			TooN::makeVector(0.0, 0.0, parameters[0]), stored_speed);
+            currentKI->setPointers(this, &controller);
+            commandUnderstood = true;
+            currentKIString = command;
+        }
+
+        // flyAround [Devesh]
+        else if (sscanf(command.c_str(), "goAroundRRelDir %f %f %f %f %f %f", 
+                &parameters[0], &parameters[1], &parameters[2], 
+                &parameters[3], &parameters[4], &parameters[5]) == 6)
+        {
+            // acos(yaw) - bsin(yaw), asin(yaw) + bcos(yaw)
+            // statePtr->yaw is clockwise. So, I take negative of it.
+            TooN::Vector<3> centerPoint = TooN::makeVector(
+                    parameters[0]
+                    * cos(-statePtr->yaw * M_PI / 180)
+                    - parameters[1]
+                    * sin(
+                        -statePtr->yaw * M_PI
+                        / 180),
+                    parameters[0]
+                    * sin(-statePtr->yaw * M_PI / 180)
+                    + parameters[1]
+                    * cos(
+                        -statePtr->yaw * M_PI
+                        / 180),
+                    parameters[2]) + parameter_referenceZero.pos;
+
+            stored_center = centerPoint;
+            stored_radius = parameters[3];
+            stored_speed = parameters[5];
+
+            currentKI = new KIFlyAround(centerPoint, parameters[3],
+			statePtr->yaw, parameters[4],
+			TooN::makeVector(0.0, 0.0, 1.0), parameters[5]);
+            currentKI->setPointers(this, &controller);
+            commandUnderstood = true;
+            currentKIString = command;
+        }
+
+        else if (sscanf(command.c_str(), "goAroundLRelDir %f %f %f %f %f %f", 
+                &parameters[0], &parameters[1], &parameters[2], 
+                &parameters[3], &parameters[4], &parameters[5]) == 6)
+        {
+            // acos(yaw) - bsin(yaw), asin(yaw) + bcos(yaw)
+            // statePtr->yaw is clockwise. So, I take negative of it.
+            TooN::Vector<3> centerPoint = TooN::makeVector(
+                    parameters[0]
+                    * cos(-statePtr->yaw * M_PI / 180)
+                    - parameters[1]
+                    * sin(
+                        -statePtr->yaw * M_PI
+                        / 180),
+                    parameters[0]
+                    * sin(-statePtr->yaw * M_PI / 180)
+                    + parameters[1]
+                    * cos(
+                        -statePtr->yaw * M_PI
+                        / 180),
+                    parameters[2]) + parameter_referenceZero.pos;
+
+            stored_center = centerPoint;
+            stored_radius = parameters[3];
+            stored_speed = parameters[5];
+
+            currentKI = new KIFlyAround(centerPoint, parameters[3],
+			statePtr->yaw, parameters[4],
+			TooN::makeVector(0.0, 0.0, -1.0), parameters[5]);
             currentKI->setPointers(this, &controller);
             commandUnderstood = true;
             currentKIString = command;

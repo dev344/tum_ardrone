@@ -379,12 +379,20 @@ class EventListener(DroneVideoDisplay):
 
     def sendCircleDirections(self, center):
         commands = ['clearCommands', 'lockScaleFP', 'setReference $POSE$', 'setLineSpeed 2', 'setStayTime 35']
-        command = 'circleRRelDir'
+        command = 'goAroundRRelDir'
+        rad_square = 0
         for num in center:
             command += ' ' + str(num)
+            rad_square += num*num
+
+        command += ' ' + str(rad_square**0.5)
+        command += ' ' + str(80)
+        command += ' ' + str(0.22)
 
         print command
         commands.append(command)
+
+        commands.append('goAroundRepeat -1 80')
 
 
         # TODO: Make a function out of the following 4 lines.

@@ -94,6 +94,11 @@ private:
 
 	// absolute height for GSV [ziquan]
 	int altdMM;
+
+    // [Devesh]
+    TooN::Vector<3> stored_center;
+    double stored_radius;
+    double stored_speed;
 public:
 	ControlNode();
 	~ControlNode();
