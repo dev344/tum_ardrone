@@ -3,9 +3,9 @@
 #include "../ControlNode.h"
 #include "../../HelperFunctions.h"
 
-ControlCommand KIFlyAround::ctrlCmdAlongCircle(TooN::Vector<3> directionUnitVector,
-		double checkpointYaw, double currentYaw) {
-	// cout << "ApproxDistanceToGoal: " << mdApproxDistance << endl;
+ControlCommand KIFlyAround::ctrlCmdAlongCircle(
+		TooN::Vector<3> directionUnitVector, double checkpointYaw,
+		double currentYaw) {
 
 	double yawRad = currentYaw * M_PI / 180;
 	ControlCommand result;
@@ -39,8 +39,11 @@ bool KIFlyAround::isTotalYawAngleAchieved(double checkpointYaw) {
 	// decreasing yaw angle
 	if (mv3CirclePlaneNormVector[2] > 0) {
 		mdApproxDistance = mdRadius
-				* (mdStartYawAngle - mdTotalYawAngle - checkpointYaw) * M_PI / 180; // distance could be +/-
-		if (checkpointYaw < mdYawAngleCheckPoint && checkpointYaw > mdYawAngleCheckPoint - 90) {
+				* (mdStartYawAngle - mdTotalYawAngle - checkpointYaw) * M_PI
+				/ 180;
+		mdApproxDistance *= -1;	// (mdStartYawAngle - mdTotalYawAngle - checkpointYaw) is -tive usually
+		if (checkpointYaw < mdYawAngleCheckPoint
+				&& checkpointYaw > mdYawAngleCheckPoint - 90) {
 			mdYawAngleCheckPoint = checkpointYaw;	// update yawAngleCheckPoint
 		}
 		if (mdYawAngleCheckPoint < mdStartYawAngle - mdTotalYawAngle) {
@@ -50,8 +53,10 @@ bool KIFlyAround::isTotalYawAngleAchieved(double checkpointYaw) {
 	// increasing yaw angle
 	else {
 		mdApproxDistance = mdRadius
-				* (mdStartYawAngle + mdTotalYawAngle - checkpointYaw) * M_PI / 180; // distance could be +/-
-		if (checkpointYaw > mdYawAngleCheckPoint && checkpointYaw < mdYawAngleCheckPoint + 90) {
+				* (mdStartYawAngle + mdTotalYawAngle - checkpointYaw) * M_PI
+				/ 180;
+		if (checkpointYaw > mdYawAngleCheckPoint
+				&& checkpointYaw < mdYawAngleCheckPoint + 90) {
 			mdYawAngleCheckPoint = checkpointYaw;	// update yawAngleCheckPoint
 		}
 		if (mdYawAngleCheckPoint > mdStartYawAngle + mdTotalYawAngle) {
@@ -116,10 +121,12 @@ bool KIFlyAround::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 	}
 	// normal case
 	else {
-		controller->setTarget(DronePosition(v3CheckPoint, checkpointYaw/*statePtr->yaw*/), true);
+		controller->setTarget(
+				DronePosition(v3CheckPoint, checkpointYaw/*statePtr->yaw*/),
+				true);
 		ControlCommand pidCmd = controller->update(statePtr);
 		ControlCommand dirCmd = ctrlCmdAlongCircle(v3DirectionUnitVector,
-				/*checkpointYaw*/statePtr->yaw, statePtr->yaw);
+		/*checkpointYaw*/statePtr->yaw, statePtr->yaw);
 		ctrlcmd = pidCmd + dirCmd;
 	}
 
