@@ -386,14 +386,15 @@ class EventListener(DroneVideoDisplay):
             rad_square += num*num
 
         command += ' ' + str(rad_square**0.5)
-        command += ' ' + str(80)
-        command += ' ' + str(0.22)
+        command += ' ' + str(90)
+        command += ' ' + str(0.31)
 
         print command
         commands.append(command)
 
-        commands.append('goAroundRepeat -1 80')
-
+        commands.append('goAroundRepeat -1 90')
+        commands.append('goAroundRepeat 1 90')
+        commands.append('goAroundRepeat -1 90')
 
         # TODO: Make a function out of the following 4 lines.
         # (and may be even the line initializing commands list.
@@ -571,8 +572,8 @@ class EventListener(DroneVideoDisplay):
                 x = float(numbers[3])
                 y = float(numbers[4])
                 all_points.append([x_i, y_i, z, x, y])
-                if 60 < x_i and x_i < 580:
-                    if 20 < y_i and y_i < 340:
+                if 10 < x_i and x_i < 630:
+                    if 10 < y_i and y_i < 350:
                         points.append([x_i, y_i, z, x, y])
         
         points.sort(key= lambda tupl: tupl[2])
