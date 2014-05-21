@@ -157,9 +157,9 @@ class EventListener(DroneVideoDisplay):
             else:
                 # Now we handle moving, notice that this section is the opposite (+=) of the keyrelease section
                 if key == KeyMapping.YawLeft:
-                    self.yaw_velocity += 1
+                    self.yaw_velocity += 0.5
                 elif key == KeyMapping.YawRight:
-                    self.yaw_velocity += -1
+                    self.yaw_velocity += -0.5
 
                 elif key == KeyMapping.PitchForward:
                     self.pitch += 1
@@ -188,9 +188,9 @@ class EventListener(DroneVideoDisplay):
             # Note that we don't handle the release of emergency/takeoff/landing keys here, there is no need.
             # Now we handle moving, notice that this section is the opposite (-=) of the keypress section
             if key == KeyMapping.YawLeft:
-                self.yaw_velocity -= 1
+                self.yaw_velocity -= 0.5
             elif key == KeyMapping.YawRight:
-                self.yaw_velocity -= -1
+                self.yaw_velocity -= -0.5
 
             elif key == KeyMapping.PitchForward:
                 self.pitch -= 1
@@ -245,10 +245,11 @@ class EventListener(DroneVideoDisplay):
 
             elif self.gesture == self.D_TO_UP:
                 print "D_TO_UP"
-                self.publisher.publish(String("D_TO_UP"))
+                # self.publisher.publish(String("D_TO_UP"))
             elif self.gesture == self.UP_TO_D:
-                self.publisher.publish(String("UP_TO_D"))
+                # self.publisher.publish(String("UP_TO_D"))
                 print "UP_TO_D"
+                self.sendZigZagTowerDirections()
             elif self.gesture == self.L_TO_R:
                 # Changing temporarily
                 self.publisher.publish(String("R_TO_L"))
@@ -386,15 +387,15 @@ class EventListener(DroneVideoDisplay):
             rad_square += num*num
 
         command += ' ' + str(rad_square**0.5)
-        command += ' ' + str(90)
-        command += ' ' + str(0.31)
+        command += ' ' + str(65)
+        command += ' ' + str(0.25)
 
         print command
         commands.append(command)
 
-        commands.append('goAroundRepeat -1 90')
-        commands.append('goAroundRepeat 1 90')
-        commands.append('goAroundRepeat -1 90')
+        commands.append('goAroundRepeat -1 125')
+        commands.append('goAroundRepeat 1 125')
+        commands.append('goAroundRepeat -1 75')
 
         # TODO: Make a function out of the following 4 lines.
         # (and may be even the line initializing commands list.
@@ -402,6 +403,34 @@ class EventListener(DroneVideoDisplay):
         commands.append('start')
         for command in commands:
             self.tum_ardrone_pub.publish(String("c " + command))
+
+    def sendZigZagTowerDirections(self):
+        commands = ['clearCommands', 'lockScaleFP', 'setReference $POSE$']
+        top_point =  self.find_closest_mappoint([self.points[0].x(), self.points[0].y()], self.sorted_mappoints)
+        bottom_point =  self.find_closest_mappoint([self.points[-1].x(), self.points[-1].y()], self.sorted_mappoints)
+
+        command = 'zigzagtower'
+        print top_point, bottom_point
+        # Send each of these to the controller
+        command += (' ' + str(self.scale * top_point[3]) + #relative x distance
+                   ' ' + str(self.scale * top_point[2]) + #relative depth(y) dist
+                   ' ' + str(-self.scale * top_point[4]) )#relative height(z) dist
+
+        command += (' ' + str(self.scale * bottom_point[3]) + #relative x distance
+                   ' ' + str(self.scale * bottom_point[2]) + #relative depth(y) dist
+                   ' ' + str(-self.scale * bottom_point[4]) )#relative height(z) dist
+
+        command += (' ' + str(90))
+
+        commands.append(command)
+
+        # TODO: Make a function out of the following 4 lines.
+        # (and may be even the line initializing commands list.
+        commands.append('land')
+        commands.append('start')
+        for command in commands:
+            self.tum_ardrone_pub.publish(String("c " + command))
+        print commands
 
     def sendZigZagDirections3(self):
         print "Here, I'll give closest points to the following four points"
