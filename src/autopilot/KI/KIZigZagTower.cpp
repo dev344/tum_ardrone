@@ -24,7 +24,7 @@ bool KIZigZagTower::isWayPointReached(int waypointNum, DronePosition pose) {
 					- pose.pos);
 
 	// check yaw diff
-	if (fabs(pose.yaw - mvdYawAngleWayPoints[colNum]) > 5) {
+	if (fabs(pose.yaw - mvdYawAngleWayPoints[colNum]) > 10) {
 		return false;
 	}
 	if (yawAngleCenter < -mdAngleH / 4 || yawAngleCenter > mdAngleH / 4) {
@@ -85,7 +85,7 @@ KIZigZagTower::KIZigZagTower(TooN::Vector<3> topPoint, TooN::Vector<3> btmPoint,
 	double tanHalfAngleH = sin(mdAngleH / 2 * M_PI / 180)
 			/ cos(mdAngleH / 2 * M_PI / 180);
 	//mdColWidth = mdDistToBoard * 2 * tanHalfAngleH * 0.6;
-	cout << "RowHeight:DistToBoard\t" << mdRowHeight << ":" ":" << mdDistToTower
+	cout << "RowHeight:DistToBoard\t" << mdRowHeight << ":" << mdDistToTower
 			<< endl;
 
 	// number of cols
@@ -96,7 +96,18 @@ KIZigZagTower::KIZigZagTower(TooN::Vector<3> topPoint, TooN::Vector<3> btmPoint,
 	mvdYawAngleWayPoints.push_back(mdAngleStart);
 	for (int i = 1; i < miNumOfCols; i++) {
 		mvdYawAngleWayPoints.push_back(
-				mdAngleStart + i * mdAngleTotal / (miNumOfCols - 1));
+				mdAngleStart - i * mdAngleTotal / (miNumOfCols - 1));
+	}
+
+	cout << "Yaw angle waypoints:";
+	for (int i = 0; i < miNumOfCols; i++) {
+		cout << "\t" << mvdYawAngleWayPoints[i];
+	}
+	cout << endl;
+
+	cout << "LandMarks:" << endl;
+	for (int i = 0; i < miNumOfRows; i++) {
+		cout << mvv3LandMarks[i] << endl;
 	}
 
 	miCurrentWayPointNum = -1;
@@ -129,8 +140,13 @@ bool KIZigZagTower::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 						statePtr->yaw),
 				DronePosition(
 						mvv3LandMarks[0]
-								+ mdRowHeight * TooN::makeVector(0, 0, -1),
-						mdAngleStart), min(1.0, mdDistToTower / 4)); // safe speed
+								+ mdRowHeight / 2 * TooN::makeVector(0, 0, -1)
+								+ mdDistToTower
+										* TooN::makeVector(
+												- sin(mdAngleStart * M_PI / 180),
+												- cos(mdAngleStart * M_PI / 180),
+												0), mdAngleStart),
+				min(1.0, mdDistToTower / 4)); // safe speed
 		mpKIHelper->setPointers(this->node, this->controller);
 	}
 
