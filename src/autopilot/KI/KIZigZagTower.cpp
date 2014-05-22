@@ -145,7 +145,7 @@ bool KIZigZagTower::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 										* TooN::makeVector(
 												- sin(mdAngleStart * M_PI / 180),
 												- cos(mdAngleStart * M_PI / 180),
-												0), mdAngleStart),
+												0), angleToValidYaw(mdAngleStart)),
 				min(1.0, mdDistToTower / 4)); // safe speed
 		mpKIHelper->setPointers(this->node, this->controller);
 	}
@@ -155,7 +155,7 @@ bool KIZigZagTower::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 			statePtr->yaw);
 
 	// is reached?
-	if (isWayPointReached(miCurrentWayPointNum, currentPose)) {
+	if (mpKIHelper->update(statePtr) && isWayPointReached(miCurrentWayPointNum, currentPose)) {
 		// snap shot
 		std_msgs::String s;
 		s.data = "Snap ";
