@@ -174,7 +174,7 @@ class DroneVideoDisplay(QtGui.QMainWindow):
         self.redrawTimer.start(GUI_UPDATE_PERIOD)
 
     def initQimages(self):
-        for i in xrange(8):
+        for i in xrange(9):
             pixmap = QtGui.QPixmap("blank_image.png")
             temp = {'ToDraw':False, 'image': pixmap}
             self.qimages.append(temp)
@@ -186,7 +186,7 @@ class DroneVideoDisplay(QtGui.QMainWindow):
             self.qimages[i]['image'] = pixmap
 
     def DrawLabels(self):
-        for i in xrange(8):
+        for i in xrange(9):
             if self.qimages[i]['ToDraw'] == True:
                 self.centralWidget.lbls[i].setPixmap(\
                         self.qimages[i]['image'].scaledToHeight(80))

@@ -146,7 +146,7 @@ bool KIZigZagTower::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 												- sin(mdAngleStart * M_PI / 180),
 												- cos(mdAngleStart * M_PI / 180),
 												0), angleToValidYaw(mdAngleStart)),
-				min(1.0, mdDistToTower / 4)); // safe speed
+				max(0.2 , min(1.0, mdDistToTower / 8))); // safe speed
 		mpKIHelper->setPointers(this->node, this->controller);
 	}
 

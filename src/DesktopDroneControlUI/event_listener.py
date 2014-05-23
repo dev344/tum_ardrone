@@ -289,7 +289,7 @@ class EventListener(DroneVideoDisplay):
             if self.centralWidget.clickedLabel != -1:
                 # If a label has been clicked, this is the place to 
                 # do whatever you want.
-                if self.gesture == self.ZIGZAG:
+                if self.gesture == self.ZIGZAG or self.gesture == self.UP_TO_D:
                     commands = ['clearCommands', 'setReference 0 0 0 0']
                     commands.append(self.location_history[self.centralWidget.clickedLabel])
                     commands.append('start')
@@ -426,7 +426,7 @@ class EventListener(DroneVideoDisplay):
 
         # TODO: Make a function out of the following 4 lines.
         # (and may be even the line initializing commands list.
-        commands.append('land')
+        # commands.append('land')
         commands.append('start')
         for command in commands:
             self.tum_ardrone_pub.publish(String("c " + command))

@@ -225,7 +225,7 @@ bool KIZigZagBoard::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 						TooN::makeVector(statePtr->x, statePtr->y, statePtr->z),
 						statePtr->yaw),
 				DronePosition(mvvv3WayPoints[0][0], mvdYawAngles[0]),
-				min(1.0, mdDistToBoard / 4));   // safe speed
+				min(1.0, mdDistToBoard / 8));   // safe speed
 		mpKIHelper->setPointers(this->node, this->controller);
 	}
 
@@ -234,7 +234,7 @@ bool KIZigZagBoard::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 			statePtr->yaw);
 
 	// if not reached yet, need to get within small radius to count.
-	if (isWayPointReached(miCurrentWayPointNum, currentPose)) {
+	if (mpKIHelper->update(statePtr) && isWayPointReached(miCurrentWayPointNum, currentPose)) {
 		// snap shot
 		std_msgs::String s;
 		s.data = "Snap ";
@@ -271,7 +271,7 @@ bool KIZigZagBoard::update(const tum_ardrone::filter_stateConstPtr statePtr) {
 					DronePosition(mvvv3WayPoints[oldRowNum][oldColNum],
 							mvdYawAngles[oldRowNum]),
 					DronePosition(mvvv3WayPoints[newRowNum][newColNum],
-							mvdYawAngles[newRowNum]), max(0.2, distance / 4)); // speed to overcome drift
+							mvdYawAngles[newRowNum]), max(0.2, distance / 8)); // speed to overcome drift
 			mpKIHelper->setPointers(this->node, this->controller);
 			cout << "Distance to next waypoint is " << mpKIHelper->getDistance()
 					<< endl;

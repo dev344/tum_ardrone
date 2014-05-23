@@ -990,7 +990,7 @@ void ControlNode::popNextCommand(
 									+ parameters[4]
 											* cos(-statePtr->yaw * M_PI / 180),
 							parameters[5]) + parameter_referenceZero.pos,
-					statePtr->yaw + parameters[6]/2 + parameter_referenceZero.yaw, parameters[6], 2,
+					statePtr->yaw + parameters[6]/2 + parameter_referenceZero.yaw, /*parameters[6]*/ 75, 3,
 					92.0 * 16 / sqrt(16 * 16 + 9 * 9),
 					92.0 * 9 / sqrt(16 * 16 + 9 * 9));
 			currentKI->setPointers(this, &controller);
