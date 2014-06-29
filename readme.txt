@@ -1,3 +1,15 @@
+This package is a spin-off from the work done by students at TUM.
+Our major contributions are 
+- A desktop semantic interface for easy quadrotor control (can be found at src/DesktopDroneControlUI)
+- Improvements to the vision system
+- Improvements and additions to the control system.
+
+Most other details to get this up and running can be found 
+at http://wiki.ros.org/tum_ardrone and in the README below
+(which is the exact README from the original work).
+
+
+"""
 Package tum_ardrone:
 
 This package contains the implementation corresponding to the following papers: 
@@ -63,3 +75,4 @@ check if it sais (under Drone Communication Status):
 - drone_stateestimation crashes occasionally when PTAM init fails (crash occurs in PTAM code). 
   Happens in oarticular if there is no baseline in between the first two keyframes, hardly ever happens in praxis.
 
+"""
